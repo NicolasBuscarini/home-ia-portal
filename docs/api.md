@@ -21,6 +21,8 @@ Ambos existem somente nos ambientes ASP.NET Core Development/Testing e exigem co
 | Cameras | Câmeras visíveis na sessão |
 | Camera administration | CRUD lógico e paginação de contextos/câmeras |
 | Camera connection | Leitura/aplicação Admin-only do endereço da câmera ativa no bridge local; sem segredo no contrato |
+| Portal | Navegação autorizada, preferências de tema/idioma e decisão de autorização por módulo/escopo |
+| Portal administration | Catálogo versionado de módulos, menus e metadados de apresentação Admin-only |
 | User administration | Consulta de contas, atribuições a perfis/escopos e desativação Admin-only |
 | Access requests | Pedido autenticado User, consulta do próprio estado e listagem/revisão Admin-only |
 | Known people | Roster de autorização/finalidade Administrator-only; não aceita biometria |
@@ -58,3 +60,18 @@ Biometria por conta (ADR072) expõe `GET /api/v1/biometrics/enrollments`, `POST 
 T08-EXTRACT (ADR075) ativa a extração real: `onnxruntime-cpu` com YuNet `2023mar` + SFace `2021dec`, pesos locais montados read-only e verificados por SHA-256 no startup. A imagem é decodificada por FFmpeg, o rosto é alinhado para 112×112 e o embedding de 128 dimensões segue para a cifra; nada é persistido em claro. Rejeições do cadastro respondem `400` com `face_not_detected`, `multiple_faces`, `face_too_small`, `image_decode_failed`, `face_detection_invalid` ou `face_embedding_invalid`; configuração ausente/divergente mantém `503`. O registry Admin expõe `runtime` (`enabled`, `state`, `adapterId`, `modelId`, `modelVersion`, `detectorSha256`, `recognizerSha256`) e `runtimeEnabled` reflete o adapter ativo; `sampleCollectionEnabled` continua falso e não há reconhecimento/matching nem coleta em câmera.
 
 Candidato registrado para avaliação em 01/11/2026 (ADR070): `FEX635030921697`, `modelId=opencv-zoo-sface`, `modelVersion=2021dec`, SHA-256 `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79`, `adapterId=onnxruntime-cpu`, contrato `face-embedding.v1`, licença de código/pesos Apache-2.0 declarada (procedência do dataset não confirmada). A URI de origem aponta ao artefato fixado pelo commit `ba91a3b91d00d76e86540d4013f944bd6b514e39` do `opencv_zoo`. O detector facial pareado é YuNet `2023mar` (MIT), que não é um candidato de extrator e por isso não entra neste registry. Nenhum artefato foi baixado para o serviço, montado no container ou carregado por runtime.
+
+## Portal (T16-B)
+
+O backend do portal foi adicionado ao host atual sem extrair o runtime de captura. O SQLite IAM passa a guardar `PortalModules` (manifesto versionado de módulo/menu) e `PortalUserPreferences` (tema/idioma por conta), criados pela migration `./garage migration-portal-modules` e aplicados no startup. O startup semeia os módulos `monitoring` (permissão `live.video.view`) e `administration` (permissão Admin-only `admin.users.manage`), sem reabilitar um módulo que o operador tenha desligado.
+
+Endpoints:
+
+- `GET /api/v1/portal/navigation`: sessão autenticada; retorna `residenceId`, timestamp e módulos habilitados cujo `requiredPermission` o ator possui em pelo menos um par câmera/contexto habilitado. Administrator vê módulos habilitados; menu vazio é resposta válida para conta sem concessão. A resposta é projeção de apresentação, não autorização.
+- `GET /api/v1/portal/preferences`: tema/idioma persistidos ou defaults (`forest`/`pt-BR`), com catálogo de valores suportados.
+- `PUT /api/v1/portal/preferences`: atualiza tema/idioma; exige Origin same-origin, valida o catálogo e audita `portal.preferences.updated`.
+- `POST /api/v1/portal/authorization/decisions`: para a sessão atual, valida `audience` (módulo habilitado), `residenceId`, chaves conhecidas e escopos públicos `{contextId,cameraId}`; retorna decisão por permissão/escopo. Não emite token de serviço (P28) e não substitui a revalidação no módulo.
+- `GET /api/v1/admin/portal-modules?page&pageSize`: catálogo completo paginado, Administrator-only.
+- `POST /api/v1/admin/portal-modules` e `PUT /api/v1/admin/portal-modules/{moduleId}`: registro/atualização versionada e auditada, Administrator + Origin same-origin. `apiBaseUrl` aceita URL HTTP(S) interna ou caminho relativo iniciado por `/` para módulo no mesmo processo. `moduleId` é minúsculo, estável e imutável; desabilitar é lógico via `isEnabled=false`.
+
+`PORTAL_RESIDENCE_ID` (default `home`) define o identificador de residência aceito nos contratos. A persistência de múltiplas residências, o token serviço-a-serviço, o shell/microfrontends e a extração do Monitoramento continuam nas fases seguintes de `T16`. Testes HTTP cobrem seed/filtro de navegação por Admin/Viewer/User, CRUD/validação/versionamento/auditoria, preferências e decisão de autorização; não há UI do portal nesta fase.

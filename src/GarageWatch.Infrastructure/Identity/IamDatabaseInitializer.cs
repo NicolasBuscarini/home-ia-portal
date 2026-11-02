@@ -108,6 +108,52 @@ public sealed class IamDatabaseInitializer(
             await database.SaveChangesAsync(cancellationToken);
         }
 
+        var portalNow = timeProvider.GetUtcNow();
+        var seededPortalModule = false;
+        if (!await database.PortalModules.AnyAsync(module => module.ModuleId == "monitoring", cancellationToken))
+        {
+            database.PortalModules.Add(new PortalModule
+            {
+                ModuleId = "monitoring",
+                DisplayNameKey = "modules.monitoring.name",
+                ContractVersion = "1.0",
+                ApiBaseUrl = "/",
+                HealthPath = "/health/ready",
+                RequiredPermission = "live.video.view",
+                MenuGroup = "overview",
+                MenuOrder = 10,
+                MenuIcon = "camera",
+                MenuLabelKey = "modules.monitoring.menu",
+                IsEnabled = true,
+                Version = 1,
+                CreatedAtUtc = portalNow,
+                UpdatedAtUtc = portalNow
+            });
+            seededPortalModule = true;
+        }
+        if (!await database.PortalModules.AnyAsync(module => module.ModuleId == "administration", cancellationToken))
+        {
+            database.PortalModules.Add(new PortalModule
+            {
+                ModuleId = "administration",
+                DisplayNameKey = "modules.administration.name",
+                ContractVersion = "1.0",
+                ApiBaseUrl = "/",
+                HealthPath = "/health/ready",
+                RequiredPermission = "admin.users.manage",
+                MenuGroup = "administration",
+                MenuOrder = 90,
+                MenuIcon = "settings",
+                MenuLabelKey = "modules.administration.menu",
+                IsEnabled = true,
+                Version = 1,
+                CreatedAtUtc = portalNow,
+                UpdatedAtUtc = portalNow
+            });
+            seededPortalModule = true;
+        }
+        if (seededPortalModule) await database.SaveChangesAsync(cancellationToken);
+
         await MigrateLegacyCameraGrantsAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);

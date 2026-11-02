@@ -824,6 +824,96 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.ToTable("KnownPeople");
                 });
 
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalModule", b =>
+                {
+                    b.Property<string>("ModuleId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApiBaseUrl")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContractVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DisplayNameKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HealthPath")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MenuGroup")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MenuIcon")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MenuLabelKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MenuOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequiredPermission")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ModuleId");
+
+                    b.HasIndex("IsEnabled", "MenuGroup", "MenuOrder");
+
+                    b.ToTable("PortalModules");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalUserPreference", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LanguageTag")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ThemeId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("PortalUserPreferences");
+                });
+
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.UserAccessProfileAssignment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1124,6 +1214,17 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.Navigation("Actor");
 
                     b.Navigation("Subject");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalUserPreference", b =>
+                {
+                    b.HasOne("GarageWatch.Infrastructure.Identity.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.UserAccessProfileAssignment", b =>

@@ -25,6 +25,10 @@ Abra `http://127.0.0.1:8081`, entre e use **Ir ao vivo**/Play. API e painel não
 
 No perfil `synthetic`, o player deve mostrar um padrão colorido em movimento gerado localmente (640×360/15 fps). Se ficar preto, confira a captura/HLS e os logs; o padrão é mídia de teste, não imagem da câmera.
 
+## Portal (T16-B)
+
+Após alterar o modelo de módulos/preferências do portal, gere a migration pelo wrapper da raiz: `./garage migration-portal-modules`. Ela cria `PortalModules` e `PortalUserPreferences` e é aplicada no próximo startup. O startup semeia `monitoring`/`administration`; consulte `docs/api.md` para os endpoints de navegação, preferências, decisão de autorização e administração de módulos. Não há UI de portal nesta fase.
+
 ## Documentação da API (Development/Testing)
 
 Com API ativa e sessão Administrator no mesmo navegador, abra `http://127.0.0.1:8081/docs` para Swagger UI ou `/openapi/v1.json` para o documento. A porta muda conforme `.env`. Estas rotas são ocultadas em Production e não devem ser expostas na LAN/Internet.

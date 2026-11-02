@@ -1,4 +1,5 @@
 using GarageWatch.Application.Cameras;
+using GarageWatch.Application.Portal;
 
 namespace GarageWatch.Api.Endpoints;
 
@@ -41,6 +42,15 @@ internal static class EndpointSecurity
         ArgumentException => Results.BadRequest(new ApiErrorResponse("invalid_admin_request")),
         KeyNotFoundException => Results.NotFound(new ApiErrorResponse("admin_resource_not_found")),
         InvalidOperationException => Results.Conflict(new ApiErrorResponse("admin_operation_conflict")),
+        UnauthorizedAccessException => Results.Forbid(),
+        _ => Results.StatusCode(StatusCodes.Status500InternalServerError)
+    };
+
+    public static IResult PortalError(Exception exception) => exception switch
+    {
+        PortalValidationException => Results.BadRequest(new ApiErrorResponse("invalid_portal_request")),
+        PortalNotFoundException => Results.NotFound(new ApiErrorResponse("portal_resource_not_found")),
+        PortalConflictException => Results.Conflict(new ApiErrorResponse("portal_conflict")),
         UnauthorizedAccessException => Results.Forbid(),
         _ => Results.StatusCode(StatusCodes.Status500InternalServerError)
     };

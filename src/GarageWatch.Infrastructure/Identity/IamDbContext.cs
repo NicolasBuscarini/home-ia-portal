@@ -36,6 +36,8 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
     public DbSet<FaceExtractorSelection> FaceExtractorSelections => Set<FaceExtractorSelection>();
     public DbSet<ClipRetentionPolicy> ClipRetentionPolicies => Set<ClipRetentionPolicy>();
     public DbSet<ClipPreservation> ClipPreservations => Set<ClipPreservation>();
+    public DbSet<PortalModule> PortalModules => Set<PortalModule>();
+    public DbSet<PortalUserPreference> PortalUserPreferences => Set<PortalUserPreference>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -308,6 +310,34 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
             entity.HasIndex(preservation => new { preservation.CameraId, preservation.IsPreserved });
             entity.HasOne<CameraCatalogEntry>().WithMany().HasForeignKey(preservation => preservation.CameraId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PortalModule>(entity =>
+        {
+            entity.HasKey(module => module.ModuleId);
+            entity.Property(module => module.ModuleId).HasMaxLength(64).IsRequired();
+            entity.Property(module => module.DisplayNameKey).HasMaxLength(128).IsRequired();
+            entity.Property(module => module.ContractVersion).HasMaxLength(32).IsRequired();
+            entity.Property(module => module.ApiBaseUrl).HasMaxLength(512).IsRequired();
+            entity.Property(module => module.HealthPath).HasMaxLength(256);
+            entity.Property(module => module.RequiredPermission).HasMaxLength(128);
+            entity.Property(module => module.MenuGroup).HasMaxLength(64).IsRequired();
+            entity.Property(module => module.MenuIcon).HasMaxLength(64).IsRequired();
+            entity.Property(module => module.MenuLabelKey).HasMaxLength(128).IsRequired();
+            entity.Property(module => module.Version).IsConcurrencyToken();
+            entity.Property(module => module.CreatedAtUtc).HasConversion(UtcTicksConverter);
+            entity.Property(module => module.UpdatedAtUtc).HasConversion(UtcTicksConverter);
+            entity.HasIndex(module => new { module.IsEnabled, module.MenuGroup, module.MenuOrder });
+        });
+
+        builder.Entity<PortalUserPreference>(entity =>
+        {
+            entity.HasKey(preference => preference.UserId);
+            entity.Property(preference => preference.ThemeId).HasMaxLength(32).IsRequired();
+            entity.Property(preference => preference.LanguageTag).HasMaxLength(16).IsRequired();
+            entity.Property(preference => preference.UpdatedAtUtc).HasConversion(UtcTicksConverter);
+            entity.HasOne(preference => preference.User).WithMany()
+                .HasForeignKey(preference => preference.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 
