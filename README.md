@@ -37,7 +37,7 @@ As operações HTTP seguem Minimal APIs, cada uma em arquivo/classe própria, co
 
 ## Monitoramento remoto (T16-C-A)
 
-O host consulta o contrato do módulo Monitoramento em `GET /api/v1/portal/modules/monitoring/health`. `MONITORING_EXECUTION_MODE=in-process` (padrão) devolve a projeção local; `remote` chama `MONITORING_BASE_URL/api/v1/monitoring/contract` com timeout de 3 s e falha sanitizada (503). O serviço `home-ia-monitoring` é contract-only nesta fase: não captura, não lê câmera/NAS e não serve mídia. A captura/fluxo atual continua no monólito; a migração de runtime/dados é `T16-C-B+`.
+O host consulta o contrato do módulo Monitoramento em `GET /api/v1/portal/modules/monitoring/health`. `MONITORING_EXECUTION_MODE=in-process` (padrão) devolve a projeção local; `remote` chama `MONITORING_BASE_URL/api/v1/monitoring/contract` com timeout de 3 s e falha sanitizada (503). `MONITORING_STATUS_SOURCE=local` (padrão) mantém o status de `/api/v1/cameras` no `CaptureWorker`; `remote` lê o read model de status do serviço. O serviço `home-ia-monitoring` é `status-read-only` (`T16-C-B-A`): lê manifests/gaps do spool e reporta `capturing`/`stale`/`unavailable`, mas ainda não captura, não escreve mídia e não serve HLS/clips. A captura continua no monólito; o corte do writer é `T16-C-B-B`.
 
 ## Portal (T16-B)
 

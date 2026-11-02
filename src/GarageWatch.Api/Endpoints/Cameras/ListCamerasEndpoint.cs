@@ -1,7 +1,9 @@
 using GarageWatch.Api.Endpoints;
 using GarageWatch.Application.Cameras;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Capture;
 using GarageWatch.Infrastructure.Identity;
+using GarageWatch.Infrastructure.Monitoring;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -13,7 +15,9 @@ public sealed class ListCamerasEndpoint() : BaseEndpoint("Cameras", "ListCameras
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/cameras", async (ClaimsPrincipal principal, UserManager<ApplicationUser> users,
-            ICameraCatalog catalog, IamDbContext database, CaptureOptions options, CaptureWorker capture, CancellationToken cancellationToken) =>
+            ICameraCatalog catalog, IamDbContext database, CaptureOptions options, CaptureWorker capture,
+            IMonitoringModuleClient monitoring, MonitoringModuleOptions monitoringOptions,
+            CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);
             if (user is null || !user.IsActive) return Results.Unauthorized();
@@ -23,10 +27,33 @@ public sealed class ListCamerasEndpoint() : BaseEndpoint("Cameras", "ListCameras
                 .Where(item => cameras.Select(camera => camera.CameraId).Contains(item.PublicId!))
                 .Select(item => new { item.PublicId, item.CameraId }).ToDictionaryAsync(item => item.PublicId!, item => item.CameraId,
                     cancellationToken);
+            var activeCamera = cameras.SingleOrDefault(camera =>
+                internalCameraIds.GetValueOrDefault(camera.CameraId) == options.CameraId);
+            var (status, epoch) = await ReadActiveStatusAsync(activeCamera?.CameraId, options, capture,
+                monitoring, monitoringOptions, cancellationToken);
             return Results.Ok(cameras.Select(camera => new CameraSummaryResponse(camera.CameraId, camera.ContextId,
-                camera.Name, camera.IsEnabled && internalCameraIds.GetValueOrDefault(camera.CameraId) == options.CameraId ? capture.Status.State : "stopped",
-                camera.IsEnabled && internalCameraIds.GetValueOrDefault(camera.CameraId) == options.CameraId ? capture.Status.StreamEpoch : null,
+                camera.Name, camera.CameraId == activeCamera?.CameraId ? status : "stopped",
+                camera.CameraId == activeCamera?.CameraId ? epoch : null,
                 $"/api/v1/live/{camera.CameraId}/index.m3u8")));
         }).RequireAuthorization("Viewer").Produces<IReadOnlyList<CameraSummaryResponse>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
+
+    private static async Task<(string Status, string? Epoch)> ReadActiveStatusAsync(string? activeCameraPublicId,
+        CaptureOptions captureOptions, CaptureWorker capture, IMonitoringModuleClient monitoring,
+        MonitoringModuleOptions monitoringOptions, CancellationToken cancellationToken)
+    {
+        if (activeCameraPublicId is null) return ("stopped", null);
+        if (monitoringOptions.StatusSource == MonitoringModuleOptions.LocalStatus)
+            return (capture.Status.State, capture.Status.StreamEpoch);
+
+        var remote = await monitoring.GetCameraStatusAsync(captureOptions.CameraId, cancellationToken);
+        if (!remote.Reachable) return ("stopped", null);
+        var status = remote.Status switch
+        {
+            "capturing" => "capturing",
+            "stale" => "reconnecting",
+            _ => "stopped"
+        };
+        return (status, remote.StreamEpoch);
+    }
 }
