@@ -264,7 +264,7 @@ services:
     init: true
     working_dir: /web
     volumes:
-      - ../garage-watch-web:/web
+      - ../home-ia-web:/web
       - web_node_modules:/web/node_modules
     environment:
       VITE_API_PROXY_TARGET: "${VITE_API_PROXY_TARGET:-http://api:8080}"
