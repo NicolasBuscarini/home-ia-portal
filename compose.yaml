@@ -6,7 +6,8 @@ services:
     build:
       context: .
       additional_contexts:
-        web_source: "${WEB_SOURCE_CONTEXT:-./web}"
+        web_source: "${WEB_SOURCE_CONTEXT:-../home-ia-web}"
+        shared_source: "${SHARED_SOURCE_CONTEXT:-../home-ia-shared}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
@@ -110,7 +111,8 @@ services:
     build:
       context: .
       additional_contexts:
-        web_source: "${WEB_SOURCE_CONTEXT:-./web}"
+        web_source: "${WEB_SOURCE_CONTEXT:-../home-ia-web}"
+        shared_source: "${SHARED_SOURCE_CONTEXT:-../home-ia-shared}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
@@ -176,7 +178,8 @@ services:
     build:
       context: .
       additional_contexts:
-        web_source: "${WEB_SOURCE_CONTEXT:-./web}"
+        web_source: "${WEB_SOURCE_CONTEXT:-../home-ia-web}"
+        shared_source: "${SHARED_SOURCE_CONTEXT:-../home-ia-shared}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
@@ -207,7 +210,8 @@ services:
     build:
       context: .
       additional_contexts:
-        web_source: "${WEB_SOURCE_CONTEXT:-./web}"
+        web_source: "${WEB_SOURCE_CONTEXT:-../home-ia-web}"
+        shared_source: "${SHARED_SOURCE_CONTEXT:-../home-ia-shared}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"

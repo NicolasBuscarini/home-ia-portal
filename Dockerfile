@@ -1,4 +1,8 @@
 FROM node:24.22.2-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS web-build
+WORKDIR /home-ia-shared
+COPY --from=shared_source /package.json /package-lock.json /tsconfig.json ./
+COPY --from=shared_source /src ./src
+RUN npm ci --omit=peer && npm run build
 WORKDIR /web
 COPY --from=web_source /package.json /package-lock.json ./
 RUN npm ci
