@@ -28,6 +28,20 @@ public sealed class CaptureWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!options.LocalCaptureEnabled)
+        {
+            Update("remote", null, null);
+            lock (_gate)
+            {
+                _status = _status with
+                {
+                    Adapter = "remote-monitoring",
+                    AdapterVersion = "external",
+                    Capabilities = ["remote-capture"]
+                };
+            }
+            return;
+        }
         while (!stoppingToken.IsCancellationRequested)
         {
             try

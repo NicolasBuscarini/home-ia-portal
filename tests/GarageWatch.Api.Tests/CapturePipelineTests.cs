@@ -597,6 +597,48 @@ public sealed class CapturePipelineTests
         }
     }
 
+    [Fact]
+    public async Task Remote_authority_stops_local_capture_without_touching_the_shared_spool()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "garagewatch-capture-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "work", "previous"));
+        File.WriteAllText(Path.Combine(root, "work", "previous", "marker"), "keep");
+        var options = new CaptureOptions("synthetic", "garage-01", root, 1, 4, 1_048_576, null,
+            "ffmpeg", "ffprobe", Authority: "remote");
+        var adapter = new CountingAdapter();
+        var worker = new CaptureWorker(options, adapter, new LocalSegmentSpool(options),
+            NullLogger<CaptureWorker>.Instance);
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+            while (worker.Status.State != "remote" && DateTime.UtcNow < deadline) await Task.Delay(10);
+            Assert.Equal("remote", worker.Status.State);
+            Assert.Equal("remote-monitoring", worker.Status.Adapter);
+            Assert.False(adapter.Started);
+            Assert.True(File.Exists(Path.Combine(root, "work", "previous", "marker")));
+        }
+        finally
+        {
+            await worker.StopAsync(CancellationToken.None);
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Remote_authority_does_not_require_a_local_rtsp_url()
+    {
+        var options = CaptureOptions.FromEnvironment(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["CAPTURE_AUTHORITY"] = "remote",
+                ["CAPTURE_PROFILE"] = "ffmpeg-rtsp"
+            }).Build());
+        Assert.Equal("remote", options.Authority);
+        Assert.False(options.LocalCaptureEnabled);
+        Assert.Null(options.RtspUrl);
+    }
+
     private static async Task WaitForClipAsync(string directory, Func<ClipManifestV1[], bool> predicate, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -694,6 +736,22 @@ public sealed class CapturePipelineTests
         Assert.Subset(schemaProperties, required);
         Assert.Subset(schemaProperties, actualProperties);
         Assert.Subset(actualProperties, required);
+    }
+
+    private sealed class CountingAdapter : ISegmentCaptureAdapter
+    {
+        public bool Started { get; private set; }
+        public string Name => "counting";
+        public string Version => "1.0";
+        public IReadOnlyList<string> Capabilities => ["contract-test"];
+
+        public async IAsyncEnumerable<CapturedSegment> CaptureAsync(string workDirectory,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            Started = true;
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            yield break;
+        }
     }
 
     private sealed class OneSegmentThenWaitAdapter : ISegmentCaptureAdapter

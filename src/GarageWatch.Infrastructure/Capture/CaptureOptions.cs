@@ -13,14 +13,21 @@ public sealed record CaptureOptions(
     string FfmpegPath,
     string FfprobePath,
     bool AudioEnabled = false,
-    int SegmentTimeoutSeconds = 0)
+    int SegmentTimeoutSeconds = 0,
+    string Authority = "local")
 {
+    public const string AuthorityKey = "CAPTURE_AUTHORITY";
+    public bool LocalCaptureEnabled => Authority == "local";
+
     public int EffectiveSegmentTimeoutSeconds => SegmentTimeoutSeconds > 0
         ? SegmentTimeoutSeconds
         : Math.Max(15, SegmentSeconds * 3 + 5);
 
     public static CaptureOptions FromEnvironment(IConfiguration configuration)
     {
+        var authority = (configuration[AuthorityKey] ?? "local").Trim().ToLowerInvariant();
+        if (authority is not ("local" or "remote"))
+            throw new InvalidOperationException("CAPTURE_AUTHORITY deve ser local ou remote.");
         var profile = configuration["CAPTURE_PROFILE"] ?? "synthetic";
         if (profile is not ("synthetic" or "ffmpeg-rtsp"))
         {
@@ -56,7 +63,7 @@ public sealed record CaptureOptions(
         {
             throw new InvalidOperationException("CAPTURE_RTSP_URL só pode ser configurada no perfil ffmpeg-rtsp.");
         }
-        if (profile == "ffmpeg-rtsp")
+        if (profile == "ffmpeg-rtsp" && authority == "local")
         {
             if (!Uri.TryCreate(rtspUrl, UriKind.Absolute, out var uri)
                 || uri.Scheme != "rtsp"
@@ -73,7 +80,7 @@ public sealed record CaptureOptions(
 
         return new CaptureOptions(profile, cameraId, spoolDirectory, segmentSeconds, maximumSegments, maximumSegmentBytes, rtspUrl,
             configuration["CAPTURE_FFMPEG_PATH"] ?? "ffmpeg",
-            configuration["CAPTURE_FFPROBE_PATH"] ?? "ffprobe", audioEnabled, segmentTimeoutSeconds);
+            configuration["CAPTURE_FFPROBE_PATH"] ?? "ffprobe", audioEnabled, segmentTimeoutSeconds, authority);
     }
 
     private static int ParseBounded(string? raw, int fallback, int minimum, int maximum, string name)

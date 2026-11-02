@@ -106,6 +106,10 @@ public static class DependencyInjection
         var faceExtractorOptions = FaceExtractorOptions.FromEnvironment(configuration);
         var portalOptions = PortalOptions.FromConfiguration(configuration);
         var monitoringOptions = MonitoringModuleOptions.FromConfiguration(configuration);
+        if (!captureOptions.LocalCaptureEnabled &&
+            monitoringOptions.StatusSource != MonitoringModuleOptions.Remote)
+            throw new InvalidOperationException(
+                "CAPTURE_AUTHORITY=remote exige MONITORING_STATUS_SOURCE=remote para evitar status local enganoso.");
         services.AddSingleton(monitoringOptions);
         services.AddHttpClient("monitoring-module", client =>
         {
