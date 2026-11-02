@@ -28,13 +28,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly IPublicIdGenerator? _publicIdGenerator;
     private readonly bool _useCameraCapture;
     private readonly ICameraConnectionManager? _cameraConnectionManager;
+    private readonly string _monitoringMode;
+    private readonly string _monitoringStatusSource;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringCaptureClient? _monitoringCaptureClient;
 
     public ApiFactory(ISystemProfileSource? profileSource = null, ILoggerProvider? loggerProvider = null,
         ISegmentCaptureAdapter? captureAdapter = null, string? databasePath = null,
         string? bootstrapUsername = "contract-user", string? bootstrapPassword = "Contract-Password-123!",
         string environment = "Testing", IPublicIdGenerator? publicIdGenerator = null,
         bool useCameraCapture = false, ICameraConnectionManager? cameraConnectionManager = null,
-        string? dataProtectionPath = null)
+        string? dataProtectionPath = null, string monitoringMode = "in-process",
+        string monitoringStatusSource = "local",
+        GarageWatch.Application.Monitoring.IMonitoringCaptureClient? monitoringCaptureClient = null)
     {
         _profileSource = profileSource;
         _loggerProvider = loggerProvider;
@@ -50,6 +55,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         _publicIdGenerator = publicIdGenerator;
         _useCameraCapture = useCameraCapture;
         _cameraConnectionManager = cameraConnectionManager;
+        _monitoringMode = monitoringMode;
+        _monitoringStatusSource = monitoringStatusSource;
+        _monitoringCaptureClient = monitoringCaptureClient;
     }
 
     public string DatabasePath => _databasePath;
@@ -65,7 +73,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["AUTH_EMAIL"] = "contract-admin@example.invalid",
             ["IDENTITY_DB_PATH"] = _databasePath,
             ["IDENTITY_DATA_PROTECTION_PATH"] = _dataProtectionPath,
-            ["CAPTURE_SPOOL_DIRECTORY"] = _captureSpoolPath
+            ["CAPTURE_SPOOL_DIRECTORY"] = _captureSpoolPath,
+            ["MONITORING_EXECUTION_MODE"] = _monitoringMode,
+            ["MONITORING_STATUS_SOURCE"] = _monitoringStatusSource,
+            ["MONITORING_BASE_URL"] = "http://monitoring.invalid"
         }));
         if (_loggerProvider is not null)
         {
@@ -101,6 +112,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 services.RemoveAll<ICameraConnectionManager>();
                 services.AddSingleton(_cameraConnectionManager);
+            }
+            if (_monitoringCaptureClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringCaptureClient>();
+                services.AddSingleton(_monitoringCaptureClient);
             }
         });
     }

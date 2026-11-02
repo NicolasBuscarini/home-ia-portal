@@ -110,7 +110,8 @@ public static class DependencyInjection
             monitoringOptions.StatusSource != MonitoringModuleOptions.Remote)
             throw new InvalidOperationException(
                 "CAPTURE_AUTHORITY=remote exige MONITORING_STATUS_SOURCE=remote para evitar status local enganoso.");
-        services.AddSingleton(monitoringOptions);
+        services.AddSingleton(provider => MonitoringModuleOptions.FromConfiguration(
+            provider.GetRequiredService<IConfiguration>()));
         services.AddHttpClient("monitoring-module", client =>
         {
             if (monitoringOptions.Mode == MonitoringModuleOptions.Remote)
@@ -118,6 +119,7 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(3);
         });
         services.AddScoped<IMonitoringModuleClient, MonitoringModuleClient>();
+        services.AddScoped<IMonitoringCaptureClient, MonitoringCaptureClient>();
         services.AddSingleton(captureOptions);
         services.AddSingleton(portalOptions);
         services.AddSingleton(triggerOptions);

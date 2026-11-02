@@ -23,10 +23,40 @@ public sealed record MonitoringCameraStatus(
     bool Reachable,
     string? ErrorCode);
 
+public sealed record MonitoringCaptureSnapshot(
+    string SchemaVersion,
+    string Profile,
+    string CameraId,
+    bool Enabled,
+    int SegmentSeconds,
+    int MaximumSegments,
+    long MaximumSegmentBytes,
+    long Revision,
+    string State,
+    string Adapter,
+    string? LastErrorCode,
+    long Gaps,
+    int Segments);
+
+public sealed record MonitoringCaptureSettings(
+    bool Enabled,
+    int SegmentSeconds,
+    int MaximumSegments,
+    long MaximumSegmentBytes,
+    long Revision);
+
 public interface IMonitoringModuleClient
 {
     Task<MonitoringModuleContract> GetContractAsync(CancellationToken cancellationToken = default);
 
     Task<MonitoringCameraStatus> GetCameraStatusAsync(string cameraId,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IMonitoringCaptureClient
+{
+    Task<MonitoringCaptureSnapshot?> GetCaptureAsync(CancellationToken cancellationToken = default);
+
+    Task<MonitoringCaptureSettings?> UpdateCaptureAsync(MonitoringCaptureSettings settings,
         CancellationToken cancellationToken = default);
 }
