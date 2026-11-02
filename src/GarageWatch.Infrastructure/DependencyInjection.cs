@@ -3,6 +3,8 @@ using GarageWatch.Application.Identity;
 using GarageWatch.Application.Cameras;
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Portal;
+using GarageWatch.Application.Monitoring;
+using GarageWatch.Infrastructure.Monitoring;
 using GarageWatch.Application.Biometrics;
 using GarageWatch.Infrastructure.Biometrics;
 using GarageWatch.Infrastructure.Capture;
@@ -103,6 +105,15 @@ public static class DependencyInjection
         var clipPlaybackOptions = ClipPlaybackOptions.FromEnvironment(configuration, captureOptions);
         var faceExtractorOptions = FaceExtractorOptions.FromEnvironment(configuration);
         var portalOptions = PortalOptions.FromConfiguration(configuration);
+        var monitoringOptions = MonitoringModuleOptions.FromConfiguration(configuration);
+        services.AddSingleton(monitoringOptions);
+        services.AddHttpClient("monitoring-module", client =>
+        {
+            if (monitoringOptions.Mode == MonitoringModuleOptions.Remote)
+                client.BaseAddress = new Uri(monitoringOptions.BaseUrl! + "/", UriKind.Absolute);
+            client.Timeout = TimeSpan.FromSeconds(3);
+        });
+        services.AddScoped<IMonitoringModuleClient, MonitoringModuleClient>();
         services.AddSingleton(captureOptions);
         services.AddSingleton(portalOptions);
         services.AddSingleton(triggerOptions);

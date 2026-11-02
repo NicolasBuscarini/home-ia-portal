@@ -35,6 +35,10 @@ As operações HTTP seguem Minimal APIs, cada uma em arquivo/classe própria, co
 
 `src/GarageWatch.Api/wwwroot/` existe vazia (com `.gitkeep`) porque o manifesto de static web assets gerado por `dotnet build`/testes referencia esse caminho; sem ela, `dotnet run` falha ao iniciar mesmo servindo o bundle de `/app/web`. Artefatos `bin/`/`obj/` gerados dentro do Compose ficam no workspace montado e devem ser limpos antes de recriar a API se houver troca entre build de teste e execução dev.
 
+## Monitoramento remoto (T16-C-A)
+
+O host consulta o contrato do módulo Monitoramento em `GET /api/v1/portal/modules/monitoring/health`. `MONITORING_EXECUTION_MODE=in-process` (padrão) devolve a projeção local; `remote` chama `MONITORING_BASE_URL/api/v1/monitoring/contract` com timeout de 3 s e falha sanitizada (503). O serviço `home-ia-monitoring` é contract-only nesta fase: não captura, não lê câmera/NAS e não serve mídia. A captura/fluxo atual continua no monólito; a migração de runtime/dados é `T16-C-B+`.
+
 ## Portal (T16-B)
 
 O host atual começa a assumir o papel de portal sem extrair o Monitoramento. O SQLite IAM ganhou `PortalModules` e `PortalUserPreferences`; o startup semeia os módulos `monitoring` e `administration` e uma residência configurada por `PORTAL_RESIDENCE_ID` (padrão `home`). `GET /api/v1/portal/navigation` devolve menus/submenus autorizados; `/api/v1/portal/preferences` persiste tema/idioma; `POST /api/v1/portal/authorization/decisions` avalia permissões/escopos por módulo; e `/api/v1/admin/portal-modules` permite ao Administrator registrar/atualizar manifestos versionados e auditados. A migration é gerada com `./garage migration-portal-modules` e aplicada no startup. A captura, HLS, IA e clipes continuam no mesmo processo nesta fase (`apiBaseUrl="/"`), atrás de uma fronteira contratual; token serviço-a-serviço, shell/microfrontend, múltiplas residências e extração do serviço ficam para `T16-C`/`T16-D`. Não há UI de portal nem validação de serviço separado.

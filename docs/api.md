@@ -22,6 +22,7 @@ Ambos existem somente nos ambientes ASP.NET Core Development/Testing e exigem co
 | Camera administration | CRUD lógico e paginação de contextos/câmeras |
 | Camera connection | Leitura/aplicação Admin-only do endereço da câmera ativa no bridge local; sem segredo no contrato |
 | Portal | Navegação autorizada, preferências de tema/idioma e decisão de autorização por módulo/escopo |
+| Portal modules | Contrato/health do módulo Monitoramento, local ou remoto, sem expor mídia |
 | Portal administration | Catálogo versionado de módulos, menus e metadados de apresentação Admin-only |
 | User administration | Consulta de contas, atribuições a perfis/escopos e desativação Admin-only |
 | Access requests | Pedido autenticado User, consulta do próprio estado e listagem/revisão Admin-only |
@@ -74,4 +75,4 @@ Endpoints:
 - `GET /api/v1/admin/portal-modules?page&pageSize`: catálogo completo paginado, Administrator-only.
 - `POST /api/v1/admin/portal-modules` e `PUT /api/v1/admin/portal-modules/{moduleId}`: registro/atualização versionada e auditada, Administrator + Origin same-origin. `apiBaseUrl` aceita URL HTTP(S) interna ou caminho relativo iniciado por `/` para módulo no mesmo processo. `moduleId` é minúsculo, estável e imutável; desabilitar é lógico via `isEnabled=false`.
 
-`PORTAL_RESIDENCE_ID` (default `home`) define o identificador de residência aceito nos contratos. A persistência de múltiplas residências, o token serviço-a-serviço, o shell/microfrontends e a extração do Monitoramento continuam nas fases seguintes de `T16`. Testes HTTP cobrem seed/filtro de navegação por Admin/Viewer/User, CRUD/validação/versionamento/auditoria, preferências e decisão de autorização; não há UI do portal nesta fase.
+`PORTAL_RESIDENCE_ID` (default `home`) define o identificador de residência aceito nos contratos. `GET /api/v1/portal/modules/monitoring/health` expõe o contrato/health do módulo para a sessão autenticada; `MONITORING_EXECUTION_MODE=in-process` (default) devolve a projeção local, e `remote` chama `MONITORING_BASE_URL/api/v1/monitoring/contract` com timeout de 3 s, retornando 503 sanitizado se indisponível. O serviço `home-ia-monitoring` ainda é contract-only (`T16-C-A`); a captura/mídia continua no monólito. A persistência de múltiplas residências, o token serviço-a-serviço e as fases de migração de runtime/dados continuam em `T16-C-B+`. Testes HTTP cobrem seed/filtro de navegação por Admin/Viewer/User, CRUD/validação/versionamento/auditoria, preferências e decisão de autorização; não há UI do portal nesta fase.
