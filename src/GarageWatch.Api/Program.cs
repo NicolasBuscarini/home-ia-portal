@@ -5,12 +5,18 @@ using GarageWatch.Api.Errors;
 using GarageWatch.Api.Live;
 using GarageWatch.Api.Observability;
 using GarageWatch.Api.Presence;
+using GarageWatch.Api.Security;
 using GarageWatch.Infrastructure;
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Application.Profiles;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
@@ -26,6 +32,21 @@ builder.Services.AddPlatformInfrastructure(builder.Configuration);
 builder.Services.AddSingleton<LivePlaylistSequence>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<ClientPresenceRegistry>();
+const string defaultDataProtectionPath = "/data/identity/data-protection";
+builder.Services.AddDataProtection().SetApplicationName("garagewatch");
+builder.Services.AddSingleton<IConfigureOptions<KeyManagementOptions>>(provider =>
+    new ConfigureNamedOptions<KeyManagementOptions>(Options.DefaultName, options =>
+    {
+        var path = provider.GetRequiredService<IConfiguration>()["IDENTITY_DATA_PROTECTION_PATH"]
+            ?? defaultDataProtectionPath;
+        if (!Path.IsPathFullyQualified(path))
+            throw new InvalidOperationException("IDENTITY_DATA_PROTECTION_PATH deve ser um caminho absoluto.");
+        Directory.CreateDirectory(path);
+        if (OperatingSystem.IsLinux())
+            File.SetUnixFileMode(path,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        options.XmlRepository = new FileSystemXmlRepository(new DirectoryInfo(path), NullLoggerFactory.Instance);
+    }));
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -33,7 +54,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Strict;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.ExpireTimeSpan = SessionPolicy.Lifetime;
     options.SlidingExpiration = false;
     options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
     options.Events.OnRedirectToLogin = context =>

@@ -20,6 +20,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly ILoggerProvider? _loggerProvider;
     private readonly ISegmentCaptureAdapter? _captureAdapter;
     private readonly string _databasePath;
+    private readonly string _dataProtectionPath;
     private readonly string _captureSpoolPath;
     private readonly string? _bootstrapUsername;
     private readonly string? _bootstrapPassword;
@@ -32,13 +33,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         ISegmentCaptureAdapter? captureAdapter = null, string? databasePath = null,
         string? bootstrapUsername = "contract-user", string? bootstrapPassword = "Contract-Password-123!",
         string environment = "Testing", IPublicIdGenerator? publicIdGenerator = null,
-        bool useCameraCapture = false, ICameraConnectionManager? cameraConnectionManager = null)
+        bool useCameraCapture = false, ICameraConnectionManager? cameraConnectionManager = null,
+        string? dataProtectionPath = null)
     {
         _profileSource = profileSource;
         _loggerProvider = loggerProvider;
         _captureAdapter = captureAdapter;
         Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "garagewatch-tests"));
         _databasePath = databasePath ?? Path.Combine(Path.GetTempPath(), "garagewatch-tests", $"{Guid.NewGuid():N}.db");
+        _dataProtectionPath = dataProtectionPath ??
+            Path.Combine(Path.GetTempPath(), "garagewatch-tests", $"keys-{Guid.NewGuid():N}");
         _captureSpoolPath = Path.Combine(Path.GetTempPath(), "garagewatch-tests", $"capture-{Guid.NewGuid():N}");
         _bootstrapUsername = bootstrapUsername;
         _bootstrapPassword = bootstrapPassword;
@@ -60,6 +64,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["AUTH_PASSWORD"] = _bootstrapPassword,
             ["AUTH_EMAIL"] = "contract-admin@example.invalid",
             ["IDENTITY_DB_PATH"] = _databasePath,
+            ["IDENTITY_DATA_PROTECTION_PATH"] = _dataProtectionPath,
             ["CAPTURE_SPOOL_DIRECTORY"] = _captureSpoolPath
         }));
         if (_loggerProvider is not null)

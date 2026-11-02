@@ -148,7 +148,9 @@ public sealed class ClipRetentionApiTests
     public async Task Archive_worker_replaces_oldest_eligible_copy_to_make_room_for_new_clip()
     {
         await using var factory = new ApiFactory();
-        var capture = factory.Services.GetRequiredService<CaptureOptions>();
+        // O spool padrão do container é compartilhado entre hosts; um spool dedicado evita que
+        // clipes criados por outro teste consumam a cota mínima usada aqui.
+        var capture = IsolatedSpool(factory.Services.GetRequiredService<CaptureOptions>());
         var old = await WriteArchivedClipAsync(capture, capture.CameraId, DateTimeOffset.UtcNow.AddDays(-20));
         var incoming = await WriteReadyForArchiveAsync(capture, capture.CameraId);
         var archive = Path.Combine(Path.GetTempPath(), "garagewatch-retention-tests", Guid.NewGuid().ToString("N"));
@@ -208,6 +210,12 @@ public sealed class ClipRetentionApiTests
             Directory.Delete(archive, recursive: true);
         }
     }
+
+    private static CaptureOptions IsolatedSpool(CaptureOptions capture) => capture with
+    {
+        SpoolDirectory = Path.Combine(Path.GetTempPath(), "garagewatch-retention-tests",
+            "spool-" + Guid.NewGuid().ToString("N"))
+    };
 
     private static async Task<ClipManifestV1> WriteArchivedClipAsync(CaptureOptions capture, string cameraId,
         DateTimeOffset archivedAt)

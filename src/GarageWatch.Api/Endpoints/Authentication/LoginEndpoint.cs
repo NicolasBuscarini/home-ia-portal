@@ -1,6 +1,7 @@
 using GarageWatch.Api.Endpoints;
 using GarageWatch.Api.Security;
 using GarageWatch.Infrastructure.Identity;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 
 namespace GarageWatch.Api.Endpoints.Authentication;
@@ -21,9 +22,17 @@ public sealed class LoginEndpoint() : BaseEndpoint("Authentication", "Login", "C
                 _ = users.PasswordHasher.HashPassword(new ApplicationUser(), request.Password);
                 return Results.Unauthorized();
             }
-            var result = await signInManager.PasswordSignInAsync(request.Username, request.Password,
-                isPersistent: false, lockoutOnFailure: true);
-            return result.Succeeded ? Results.NoContent() : Results.Unauthorized();
+            var result = await signInManager.CheckPasswordSignInAsync(account, request.Password,
+                lockoutOnFailure: true);
+            if (!result.Succeeded) return Results.Unauthorized();
+            var issuedAt = DateTimeOffset.UtcNow;
+            await signInManager.SignInWithClaimsAsync(account, new AuthenticationProperties
+            {
+                IsPersistent = true,
+                IssuedUtc = issuedAt,
+                ExpiresUtc = issuedAt.Add(SessionPolicy.Lifetime)
+            }, additionalClaims: []);
+            return Results.NoContent();
         }).AllowAnonymous().RequireRateLimiting("login")
             .Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status429TooManyRequests);

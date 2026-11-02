@@ -474,6 +474,59 @@ public sealed class CapturePipelineTests
     }
 
     [Fact]
+    public async Task Active_clip_blocks_new_clip_until_collection_ends()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "garagewatch-clip-tests", Guid.NewGuid().ToString("N"));
+        var capture = new CaptureOptions("synthetic", "garage-01", root, 1, 4, 1_048_576, null, "ffmpeg", "ffprobe");
+        var options = new ClipTriggerOptions(true, 1, 64, 64, 24, .05, 0, 0, 2, 120, 4);
+        var spool = new LocalSegmentSpool(capture);
+        Directory.CreateDirectory(Path.Combine(root, "input"));
+        var start = DateTimeOffset.UtcNow;
+        var manifests = new List<SegmentManifestV1>();
+        var worker = new ClipTriggerWorker(capture, options, spool, new AlwaysChangedDetector(), new ContractClipAssembler(),
+            NullLogger<ClipTriggerWorker>.Instance);
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            var directory = Path.Combine(root, "clips", "manifests");
+            for (var index = 0; index < 4; index++)
+            {
+                var source = Path.Combine(root, "input", $"{index}.ts");
+                await File.WriteAllBytesAsync(source, [(byte)index, 0x47]);
+                var endedAt = start.AddSeconds(index);
+                var manifest = await spool.StoreAsync(new CapturedSegment(source, endedAt.AddSeconds(-1), endedAt),
+                    Guid.NewGuid().ToString(), CancellationToken.None);
+                manifests.Add(manifest);
+                Assert.True(worker.TryEnqueue(manifest));
+
+                var expected = manifest.SegmentId;
+                if (index is 0 or 1 or 3)
+                    await WaitForClipAsync(directory, clips => clips.Any(clip => clip.State == "collecting"
+                        && clip.SegmentIds.Contains(expected)), TimeSpan.FromSeconds(5));
+                if (index == 2)
+                    await WaitForClipAsync(directory, clips => clips.Any(clip => clip.State == "ready")
+                        && clips.Any(clip => clip.State == "collecting"
+                            && clip.SegmentIds.Contains(expected)), TimeSpan.FromSeconds(5));
+            }
+
+            await Task.Delay(250);
+            var clips = await ReadClipsAsync(directory);
+            Assert.Equal(2, clips.Length);
+            var completed = Assert.Single(clips, clip => clip.State == "ready");
+            var collecting = Assert.Single(clips, clip => clip.State == "collecting");
+            Assert.All(clips, clip => Assert.Equal(capture.CameraId, clip.CameraId));
+            Assert.Equal(manifests.Take(3).Select(manifest => manifest.SegmentId), completed.SegmentIds);
+            Assert.Equal(manifests.Skip(2).Select(manifest => manifest.SegmentId), collecting.SegmentIds);
+        }
+        finally
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await worker.StopAsync(timeout.Token);
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Local_assembler_creates_checked_media_and_thumbnail_from_real_segments()
     {
         var root = Path.Combine(Path.GetTempPath(), "garagewatch-clip-tests", Guid.NewGuid().ToString("N"));
@@ -542,6 +595,28 @@ public sealed class CapturePipelineTests
             await worker.StopAsync(timeout.Token);
             if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
+    }
+
+    private static async Task WaitForClipAsync(string directory, Func<ClipManifestV1[], bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (predicate(await ReadClipsAsync(directory))) return;
+            await Task.Delay(25);
+        }
+        throw new TimeoutException("Clip worker did not reach the expected state.");
+    }
+
+    private static async Task<ClipManifestV1[]> ReadClipsAsync(string directory)
+    {
+        var clips = new List<ClipManifestV1>();
+        foreach (var path in Directory.Exists(directory) ? Directory.GetFiles(directory, "*.json") : [])
+        {
+            var clip = JsonSerializer.Deserialize<ClipManifestV1>(await File.ReadAllTextAsync(path), JsonOptions);
+            if (clip is not null) clips.Add(clip);
+        }
+        return clips.ToArray();
     }
 
     private static async Task<string> WaitForManifestAsync(string root, TimeSpan timeout)

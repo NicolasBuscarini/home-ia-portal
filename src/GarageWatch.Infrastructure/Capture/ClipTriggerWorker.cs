@@ -66,6 +66,11 @@ public sealed class ClipTriggerWorker : BackgroundService
         {
             await AdvancePendingAsync(segment, stoppingToken);
             if (!await IsTriggerEnabledAsync(stoppingToken)) continue;
+            if (HasClipInProgress())
+            {
+                Observations.Add(1, new TagList { { "outcome", "clip_in_progress" } });
+                continue;
+            }
             var path = Spool.TryGetSegmentPath(segment);
             if (path is null || DateTimeOffset.UtcNow - lastTriggerAt < TimeSpan.FromSeconds(Options.CooldownSeconds)) continue;
             if (!await Detector.HasRelevantChangeAsync(path, stoppingToken))
@@ -123,6 +128,9 @@ public sealed class ClipTriggerWorker : BackgroundService
                 await CompleteAsync(pendingClip, cancellationToken);
         }
     }
+
+    private bool HasClipInProgress() =>
+        pending.Count > 0 || ReadManifests().Any(clip => clip.State == "collecting");
 
     private async Task StartClipAsync(SegmentManifestV1 segment, CancellationToken cancellationToken)
     {

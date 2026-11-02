@@ -82,6 +82,7 @@ services:
       CAPTURE_FFMPEG_PATH: "${CAPTURE_FFMPEG_PATH:-ffmpeg}"
       CAPTURE_FFPROBE_PATH: "${CAPTURE_FFPROBE_PATH:-ffprobe}"
       IDENTITY_DB_PATH: "${IDENTITY_DB_PATH:-/data/identity/garagewatch.db}"
+      IDENTITY_DATA_PROTECTION_PATH: "${IDENTITY_DATA_PROTECTION_PATH:-/data/identity/data-protection}"
       AUTH_USERNAME: "${AUTH_USERNAME:-}"
       AUTH_PASSWORD: "${AUTH_PASSWORD:-}"
       AUTH_EMAIL: "${AUTH_EMAIL:-}"
@@ -234,6 +235,7 @@ services:
       CAPTURE_FFMPEG_PATH: ffmpeg
       CAPTURE_FFPROBE_PATH: ffprobe
       IDENTITY_DB_PATH: "/tmp/identity/garagewatch-${RTSP_CONTRACT_RUN_ID:-manual}.db"
+      IDENTITY_DATA_PROTECTION_PATH: "/tmp/identity/data-protection-${RTSP_CONTRACT_RUN_ID:-manual}"
       AUTH_USERNAME: "${AUTH_USERNAME:-}"
       AUTH_PASSWORD: "${AUTH_PASSWORD:-}"
       AUTH_EMAIL: "${AUTH_EMAIL:-}"
