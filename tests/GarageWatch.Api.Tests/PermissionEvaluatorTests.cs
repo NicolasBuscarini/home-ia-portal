@@ -10,7 +10,7 @@ public sealed class PermissionEvaluatorTests
     [Fact]
     public void Catalog_is_finite_versioned_and_separates_delegable_capabilities()
     {
-        Assert.Equal("1.1", PermissionCatalog.Version);
+        Assert.Equal("1.2", PermissionCatalog.Version);
         Assert.Equal(PermissionCatalog.All.Count, PermissionCatalog.All.Select(entry => entry.Key)
             .Distinct(StringComparer.Ordinal).Count());
         Assert.True(PermissionCatalog.TryGet("live.video.view", out var video));

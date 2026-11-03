@@ -43,6 +43,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly GarageWatch.Application.Monitoring.IMonitoringRosterClient? _monitoringRosterClient;
     private readonly GarageWatch.Application.Monitoring.IMonitoringRetentionClient? _monitoringRetentionClient;
     private readonly GarageWatch.Application.Monitoring.IMonitoringBiometricClient? _monitoringBiometricClient;
+    private readonly GarageWatch.Application.Portal.IActivityWatchModule? _activityWatchModule;
+    private readonly string _activityWatchBaseUrl;
 
     public ApiFactory(ISystemProfileSource? profileSource = null, ILoggerProvider? loggerProvider = null,
         ISegmentCaptureAdapter? captureAdapter = null, string? databasePath = null,
@@ -63,7 +65,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         string monitoringRetentionSource = "local",
         GarageWatch.Application.Monitoring.IMonitoringRetentionClient? monitoringRetentionClient = null,
         string monitoringBiometricsSource = "local",
-        GarageWatch.Application.Monitoring.IMonitoringBiometricClient? monitoringBiometricClient = null)
+        GarageWatch.Application.Monitoring.IMonitoringBiometricClient? monitoringBiometricClient = null,
+        GarageWatch.Application.Portal.IActivityWatchModule? activityWatchModule = null,
+        string activityWatchBaseUrl = "http://activitywatch.invalid")
     {
         _profileSource = profileSource;
         _loggerProvider = loggerProvider;
@@ -94,6 +98,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         _monitoringRosterClient = monitoringRosterClient;
         _monitoringRetentionClient = monitoringRetentionClient;
         _monitoringBiometricClient = monitoringBiometricClient;
+        _activityWatchModule = activityWatchModule;
+        _activityWatchBaseUrl = activityWatchBaseUrl;
     }
 
     public string DatabasePath => _databasePath;
@@ -119,7 +125,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["MONITORING_RETENTION_SOURCE"] = _monitoringRetentionSource,
             ["MONITORING_BIOMETRICS_SOURCE"] = _monitoringBiometricsSource,
             ["MONITORING_BASE_URL"] = "http://monitoring.invalid",
-            ["MONITORING_SERVICE_TOKEN_SECRET"] = "test-monitoring-service-secret-0123456789abcdef"
+            ["MONITORING_SERVICE_TOKEN_SECRET"] = "test-monitoring-service-secret-0123456789abcdef",
+            ["ACTIVITYWATCH_BASE_URL"] = _activityWatchBaseUrl
         }));
         if (_loggerProvider is not null)
         {
@@ -190,6 +197,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringBiometricClient>();
                 services.AddSingleton(_monitoringBiometricClient);
+            }
+            if (_activityWatchModule is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Portal.IActivityWatchModule>();
+                services.AddSingleton(_activityWatchModule);
             }
         });
     }

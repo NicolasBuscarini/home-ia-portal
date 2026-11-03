@@ -10,6 +10,7 @@ services:
         shared_source: "${SHARED_SOURCE_CONTEXT:-../home-ia-shared}"
         monitoring_web_source: "${MONITORING_WEB_SOURCE_CONTEXT:-../home-ia-monitoring-web}"
         platform_web_source: "${ADMIN_WEB_SOURCE_CONTEXT:-../home-ia-platform-web}"
+        activitywatch_web_source: "${ACTIVITYWATCH_WEB_SOURCE_CONTEXT:-../home-ia-module-activitywatch}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
@@ -105,8 +106,14 @@ services:
       AUTH_EMAIL: "${AUTH_EMAIL:-}"
       NEOLINK_CONTROL_URL: "${NEOLINK_CONTROL_URL:-http://neolink:8555}"
       NEOLINK_CONTROL_TOKEN: "${NEOLINK_CONTROL_TOKEN:-}"
+      ACTIVITYWATCH_BASE_URL: "${ACTIVITYWATCH_BASE_URL:-http://host.docker.internal:5600}"
+      ACTIVITYWATCH_API_TOKEN: "${ACTIVITYWATCH_API_TOKEN:-}"
+      ACTIVITYWATCH_TIMEOUT_SECONDS: "${ACTIVITYWATCH_TIMEOUT_SECONDS:-3}"
+      ACTIVITYWATCH_LOOKBACK_HOURS: "${ACTIVITYWATCH_LOOKBACK_HOURS:-24}"
     ports:
       - "127.0.0.1:${APP_PORT:-8081}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     tmpfs:
       - /tmp:size=1g,mode=1777
     security_opt:
@@ -130,6 +137,7 @@ services:
         shared_source: "${SHARED_SOURCE_CONTEXT:-../home-ia-shared}"
         monitoring_web_source: "${MONITORING_WEB_SOURCE_CONTEXT:-../home-ia-monitoring-web}"
         platform_web_source: "${ADMIN_WEB_SOURCE_CONTEXT:-../home-ia-platform-web}"
+        activitywatch_web_source: "${ACTIVITYWATCH_WEB_SOURCE_CONTEXT:-../home-ia-module-activitywatch}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
@@ -199,6 +207,7 @@ services:
         shared_source: "${SHARED_SOURCE_CONTEXT:-../home-ia-shared}"
         monitoring_web_source: "${MONITORING_WEB_SOURCE_CONTEXT:-../home-ia-monitoring-web}"
         platform_web_source: "${ADMIN_WEB_SOURCE_CONTEXT:-../home-ia-platform-web}"
+        activitywatch_web_source: "${ACTIVITYWATCH_WEB_SOURCE_CONTEXT:-../home-ia-module-activitywatch}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
@@ -233,6 +242,7 @@ services:
         shared_source: "${SHARED_SOURCE_CONTEXT:-../home-ia-shared}"
         monitoring_web_source: "${MONITORING_WEB_SOURCE_CONTEXT:-../home-ia-monitoring-web}"
         platform_web_source: "${ADMIN_WEB_SOURCE_CONTEXT:-../home-ia-platform-web}"
+        activitywatch_web_source: "${ACTIVITYWATCH_WEB_SOURCE_CONTEXT:-../home-ia-module-activitywatch}"
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
@@ -329,6 +339,7 @@ services:
       VITE_API_PROXY_TARGET: "${VITE_API_PROXY_TARGET:-http://api:8080}"
       VITE_MONITORING_REMOTE_URL: "http://127.0.0.1:5174/remoteEntry.js"
       VITE_PLATFORM_REMOTE_URL: "http://127.0.0.1:5175/remoteEntry.js"
+      VITE_ACTIVITYWATCH_REMOTE_URL: "http://127.0.0.1:5176/remoteEntry.js"
       NPM_CONFIG_CACHE: /tmp/npm-cache
     tmpfs:
       - /tmp:size=256m,mode=1777
@@ -386,6 +397,30 @@ services:
       - "127.0.0.1:5175:5175"
     command: sh -lc 'npm ci && npm run dev -- --host 0.0.0.0 --port 5175 --strictPort'
 
+  activitywatch-web-dev:
+    image: node:24.22.2-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
+    profiles: [web-dev]
+    depends_on:
+      shared-build:
+        condition: service_completed_successfully
+    cpus: "${PLATFORM_WEB_CPUS:-1.0}"
+    mem_limit: "${PLATFORM_WEB_MEMORY_LIMIT:-1g}"
+    init: true
+    working_dir: /activitywatch-web
+    volumes:
+      - ../home-ia-module-activitywatch:/activitywatch-web
+      - ../home-ia-shared:/home-ia-shared:ro
+      - activitywatch_web_node_modules:/activitywatch-web/node_modules
+    environment:
+      NPM_CONFIG_CACHE: /tmp/npm-cache
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:5176:5176"
+    command: sh -lc 'npm ci && npm run dev -- --host 0.0.0.0 --port 5176 --strictPort'
+
 networks:
   rtsp_lab:
     name: garage-watch-rtsp-lab
@@ -396,3 +431,4 @@ volumes:
   shared_build_node_modules:
   monitoring_web_node_modules:
   platform_web_node_modules:
+  activitywatch_web_node_modules:

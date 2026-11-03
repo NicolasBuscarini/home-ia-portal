@@ -24,6 +24,7 @@ public sealed class PortalApiTests
         var adminModules = adminJson.RootElement.GetProperty("modules").EnumerateArray()
             .Select(item => item.GetProperty("moduleId").GetString()).ToArray();
         Assert.Contains("monitoring", adminModules);
+        Assert.Contains("activitywatch", adminModules);
         Assert.Contains("administration", adminModules);
 
         var viewerId = await CreateUserAsync(factory, "portal-viewer", "Viewer");
@@ -55,25 +56,25 @@ public sealed class PortalApiTests
         using var admin = await LoginAsync(factory, "contract-user", "Contract-Password-123!");
         admin.DefaultRequestHeaders.Add("Origin", "http://localhost");
 
-        using var created = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules", ModuleBody("activitywatch"));
+        using var created = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules", ModuleBody("wellness"));
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
-        Assert.Equal("activitywatch", createdJson.RootElement.GetProperty("moduleId").GetString());
+        Assert.Equal("wellness", createdJson.RootElement.GetProperty("moduleId").GetString());
         Assert.Equal(1, createdJson.RootElement.GetProperty("version").GetInt64());
 
-        using var duplicate = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules", ModuleBody("activitywatch"));
+        using var duplicate = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules", ModuleBody("wellness"));
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
 
-        using var stale = await admin.PutAsJsonAsync("/api/v1/admin/portal-modules/activitywatch",
-            UpdateModuleBody("activitywatch", 99, "activitywatch.name"));
+        using var stale = await admin.PutAsJsonAsync("/api/v1/admin/portal-modules/wellness",
+            UpdateModuleBody("wellness", 99, "wellness.name"));
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
 
-        using var updated = await admin.PutAsJsonAsync("/api/v1/admin/portal-modules/activitywatch",
-            UpdateModuleBody("activitywatch", 1, "activitywatch.name"));
+        using var updated = await admin.PutAsJsonAsync("/api/v1/admin/portal-modules/wellness",
+            UpdateModuleBody("wellness", 1, "wellness.name"));
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         using var updatedJson = JsonDocument.Parse(await updated.Content.ReadAsStringAsync());
         Assert.Equal(2, updatedJson.RootElement.GetProperty("version").GetInt64());
-        Assert.Equal("activitywatch.name", updatedJson.RootElement.GetProperty("displayNameKey").GetString());
+        Assert.Equal("wellness.name", updatedJson.RootElement.GetProperty("displayNameKey").GetString());
 
         using var invalid = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules", ModuleBody("Bad Id"));
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
@@ -89,7 +90,7 @@ public sealed class PortalApiTests
 
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-        Assert.Equal(1, await database.PortalModules.CountAsync(module => module.ModuleId == "activitywatch"));
+        Assert.Equal(1, await database.PortalModules.CountAsync(module => module.ModuleId == "wellness"));
         Assert.Equal(2, await database.IamAuditEvents.CountAsync(entry => entry.Action.StartsWith("portal_module.")));
     }
 

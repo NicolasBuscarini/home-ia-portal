@@ -152,6 +152,27 @@ public sealed class IamDatabaseInitializer(
             });
             seededPortalModule = true;
         }
+        if (!await database.PortalModules.AnyAsync(module => module.ModuleId == "activitywatch", cancellationToken))
+        {
+            database.PortalModules.Add(new PortalModule
+            {
+                ModuleId = "activitywatch",
+                DisplayNameKey = "modules.activitywatch.name",
+                ContractVersion = "1.0",
+                ApiBaseUrl = "/",
+                HealthPath = "/api/0/info",
+                RequiredPermission = "activitywatch.read",
+                MenuGroup = "overview",
+                MenuOrder = 20,
+                MenuIcon = "activity",
+                MenuLabelKey = "modules.activitywatch.menu",
+                IsEnabled = true,
+                Version = 1,
+                CreatedAtUtc = portalNow,
+                UpdatedAtUtc = portalNow
+            });
+            seededPortalModule = true;
+        }
         if (seededPortalModule) await database.SaveChangesAsync(cancellationToken);
 
         await MigrateLegacyCameraGrantsAsync(cancellationToken);

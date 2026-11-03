@@ -72,6 +72,7 @@ Endpoints:
 - `GET /api/v1/portal/preferences`: tema/idioma persistidos ou defaults (`forest`/`pt-BR`), com catálogo de valores suportados.
 - `PUT /api/v1/portal/preferences`: atualiza tema/idioma; exige Origin same-origin, valida o catálogo e audita `portal.preferences.updated`.
 - `POST /api/v1/portal/authorization/decisions`: para a sessão atual, valida `audience` (módulo habilitado), `residenceId`, chaves conhecidas e escopos públicos `{contextId,cameraId}`; retorna decisão por permissão/escopo. Não emite token de serviço (P28) e não substitui a revalidação no módulo.
+- `GET /api/v1/portal/modules/activitywatch/summary`: sessão ativa, módulo `activitywatch` habilitado e permissão `activitywatch.read` (não delegável nesta fase; somente Administrator). Retorna agregado por aplicativo (segundos e contagem) da janela configurada, sem títulos/URLs/hostnames; falha do serviço externo retorna `503` com `activitywatch_timeout|unreachable|error|invalid_response`. Cada leitura/negação é auditada (`activitywatch.read`, `.denied`, `.unavailable`). Não existe endpoint de escrita.
 - `GET /api/v1/admin/portal-modules?page&pageSize`: catálogo completo paginado, Administrator-only.
 - `POST /api/v1/admin/portal-modules` e `PUT /api/v1/admin/portal-modules/{moduleId}`: registro/atualização versionada e auditada, Administrator + Origin same-origin. `apiBaseUrl` aceita URL HTTP(S) interna ou caminho relativo iniciado por `/` para módulo no mesmo processo. `moduleId` é minúsculo, estável e imutável; desabilitar é lógico via `isEnabled=false`.
 

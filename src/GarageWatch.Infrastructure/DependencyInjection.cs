@@ -10,6 +10,7 @@ using GarageWatch.Infrastructure.Biometrics;
 using GarageWatch.Infrastructure.Capture;
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Infrastructure.Identity.Repositories;
+using GarageWatch.Infrastructure.Integrations;
 using GarageWatch.Infrastructure.Analysis;
 using GarageWatch.Application.Analysis;
 using GarageWatch.Infrastructure.Events;
@@ -162,6 +163,14 @@ public static class DependencyInjection
         services.AddScoped<IMonitoringClipMediaClient, MonitoringClipMediaClient>();
         services.AddSingleton<IMonitoringEventsClient, MonitoringEventsClient>();
         services.AddSingleton<RemoteEventJournal>();
+        var activityWatchOptions = ActivityWatchOptions.FromConfiguration(configuration);
+        services.AddSingleton(activityWatchOptions);
+        services.AddHttpClient(ActivityWatchOptions.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri(activityWatchOptions.BaseUrl + "/", UriKind.Absolute);
+            client.Timeout = TimeSpan.FromSeconds(activityWatchOptions.TimeoutSeconds);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddScoped<IActivityWatchModule, ActivityWatchClient>();
         services.AddSingleton(captureOptions);
         services.AddSingleton(portalOptions);
         services.AddSingleton(triggerOptions);
