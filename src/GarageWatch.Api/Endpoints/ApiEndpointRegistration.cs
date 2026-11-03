@@ -42,6 +42,7 @@ public static class ApiEndpointRegistration
             new Portal.UpdatePortalPreferencesEndpoint(), new Portal.CreatePortalAuthorizationDecisionEndpoint(),
             new Portal.GetActivityWatchSummaryEndpoint(),
             new Portal.GetMonitoringModuleHealthEndpoint(),
+            new Portal.GetPortalHealthEndpoint(),
             new Biometrics.ListBiometricEnrollmentsEndpoint(), new Biometrics.EnrollBiometricEndpoint(),
             new Biometrics.RevokeBiometricEnrollmentEndpoint(),
             new Live.GetPlaylistEndpoint(), new Live.GetSegmentEndpoint(),

@@ -237,6 +237,35 @@ public sealed class ActivityWatchModuleTests
         return client;
     }
 
+    [Fact]
+    public async Task Health_probe_uses_info_endpoint_with_token_and_maps_failure_to_sanitized_code()
+    {
+        var now = new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
+        var requests = new List<(string Path, string? Authorization)>();
+        var client = new ActivityWatchClient(new StubHttpClientFactory(new StubHttpMessageHandler(request =>
+            {
+                requests.Add((request.RequestUri!.PathAndQuery, request.Headers.Authorization?.ToString()));
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            })),
+            new ActivityWatchOptions("http://activitywatch.test", "token-value", 3, 24), new FixedTimeProvider(now),
+            new NullIntegrationCredentialStore());
+
+        var healthy = await client.CheckHealthAsync();
+        Assert.True(healthy.Reachable);
+        Assert.Null(healthy.ErrorCode);
+        var request = Assert.Single(requests);
+        Assert.Equal("/api/0/info", request.Path);
+        Assert.Equal("Bearer token-value", request.Authorization);
+
+        var failing = new ActivityWatchClient(new StubHttpClientFactory(new StubHttpMessageHandler(_ =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)))),
+            new ActivityWatchOptions("http://activitywatch.test", null, 3, 24), new FixedTimeProvider(now),
+            new NullIntegrationCredentialStore());
+        var unhealthy = await failing.CheckHealthAsync();
+        Assert.False(unhealthy.Reachable);
+        Assert.Equal("activitywatch_health_error", unhealthy.ErrorCode);
+    }
+
     private static Task<HttpResponseMessage> Json(object payload) => Task.FromResult(
         new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(payload) });
 }
@@ -261,14 +290,24 @@ internal sealed class StubHttpClientFactory(HttpMessageHandler handler) : IHttpC
     };
 }
 
-internal sealed class StubActivityWatchModule(ActivityWatchSummary summary) : IActivityWatchModule
+internal sealed class StubActivityWatchModule(ActivityWatchSummary summary, bool healthy = true) : IActivityWatchModule
 {
     public int Calls { get; private set; }
+
+    public int HealthCalls { get; private set; }
 
     public Task<ActivityWatchSummary> GetSummaryAsync(CancellationToken cancellationToken = default)
     {
         Calls++;
         return Task.FromResult(summary);
+    }
+
+    public Task<ActivityWatchHealth> CheckHealthAsync(CancellationToken cancellationToken = default)
+    {
+        HealthCalls++;
+        return Task.FromResult(healthy
+            ? new ActivityWatchHealth(true, null)
+            : new ActivityWatchHealth(false, "activitywatch_unreachable"));
     }
 }
 

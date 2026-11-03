@@ -8,6 +8,7 @@ using GarageWatch.Infrastructure.Monitoring;
 using GarageWatch.Application.Biometrics;
 using GarageWatch.Infrastructure.Biometrics;
 using GarageWatch.Infrastructure.Capture;
+using GarageWatch.Infrastructure.Health;
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Infrastructure.Identity.Repositories;
 using GarageWatch.Infrastructure.Integrations;
@@ -73,6 +74,10 @@ public static class DependencyInjection
         services.AddScoped<IPortalNavigation>(provider => provider.GetRequiredService<PortalService>());
         services.AddScoped<IPortalPreferences>(provider => provider.GetRequiredService<PortalService>());
         services.AddScoped<IPortalAuthorizationDecisions>(provider => provider.GetRequiredService<PortalService>());
+        services.AddScoped<IPortalHealth, PortalHealthService>();
+        services.AddScoped<IPortalModuleHealthProbe, MonitoringModuleHealthProbe>();
+        services.AddScoped<IPortalModuleHealthProbe, ActivityWatchHealthProbe>();
+        services.AddSingleton<IPortalModuleHealthProbe>(new InProcessModuleHealthProbe("administration"));
         services.AddScoped<AccessRequestService>();
         services.AddScoped<ClipAnalysisDispatchService>();
         services.AddScoped<CameraClipTriggerConfigurationService>();

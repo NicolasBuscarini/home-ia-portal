@@ -115,6 +115,33 @@ public sealed class ActivityWatchClient(
         }
     }
 
+    public async Task<ActivityWatchHealth> CheckHealthAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var token = await ResolveTokenAsync(cancellationToken);
+            using var client = httpClientFactory.CreateClient(ActivityWatchOptions.HttpClientName);
+            using var request = CreateRequest("api/0/info", token);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            return response.IsSuccessStatusCode
+                ? new ActivityWatchHealth(true, null)
+                : new ActivityWatchHealth(false, "activitywatch_health_error");
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new ActivityWatchHealth(false, "activitywatch_timeout");
+        }
+        catch (HttpRequestException)
+        {
+            return new ActivityWatchHealth(false, "activitywatch_unreachable");
+        }
+        catch (IntegrationCredentialUnreadableException)
+        {
+            return new ActivityWatchHealth(false, "activitywatch_credential_unreadable");
+        }
+    }
+
     /// <summary>
     /// Stored portal credential takes precedence over the environment token; the environment value
     /// remains the documented rollback path. The value never leaves this call stack.

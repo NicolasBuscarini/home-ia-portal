@@ -18,7 +18,14 @@ public sealed record ActivityWatchSummary(
     IReadOnlyList<ActivityWatchApplicationUsage> Applications,
     string? ErrorCode);
 
+/// <summary>
+/// Minimal reachability signal for aggregated portal health. It makes a single bounded request to
+/// the service info endpoint and never returns payloads, titles or URLs.
+/// </summary>
+public sealed record ActivityWatchHealth(bool Reachable, string? ErrorCode);
+
 public interface IActivityWatchModule
 {
     Task<ActivityWatchSummary> GetSummaryAsync(CancellationToken cancellationToken = default);
+    Task<ActivityWatchHealth> CheckHealthAsync(CancellationToken cancellationToken = default);
 }
