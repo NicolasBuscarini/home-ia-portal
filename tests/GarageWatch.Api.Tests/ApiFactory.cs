@@ -30,7 +30,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly ICameraConnectionManager? _cameraConnectionManager;
     private readonly string _monitoringMode;
     private readonly string _monitoringStatusSource;
+    private readonly string _monitoringClipsSource;
+    private readonly string _monitoringEventsSource;
+    private readonly string _monitoringAnalysisSource;
+    private readonly string _monitoringRosterSource;
+    private readonly string _monitoringRetentionSource;
+    private readonly string _monitoringBiometricsSource;
     private readonly GarageWatch.Application.Monitoring.IMonitoringCaptureClient? _monitoringCaptureClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringClipsClient? _monitoringClipsClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringEventsClient? _monitoringEventsClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringAnalysisClient? _monitoringAnalysisClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringRosterClient? _monitoringRosterClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringRetentionClient? _monitoringRetentionClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringBiometricClient? _monitoringBiometricClient;
 
     public ApiFactory(ISystemProfileSource? profileSource = null, ILoggerProvider? loggerProvider = null,
         ISegmentCaptureAdapter? captureAdapter = null, string? databasePath = null,
@@ -39,7 +51,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         bool useCameraCapture = false, ICameraConnectionManager? cameraConnectionManager = null,
         string? dataProtectionPath = null, string monitoringMode = "in-process",
         string monitoringStatusSource = "local",
-        GarageWatch.Application.Monitoring.IMonitoringCaptureClient? monitoringCaptureClient = null)
+        GarageWatch.Application.Monitoring.IMonitoringCaptureClient? monitoringCaptureClient = null,
+        string monitoringClipsSource = "local",
+        GarageWatch.Application.Monitoring.IMonitoringClipsClient? monitoringClipsClient = null,
+        string monitoringEventsSource = "local",
+        GarageWatch.Application.Monitoring.IMonitoringEventsClient? monitoringEventsClient = null,
+        string monitoringAnalysisSource = "local",
+        GarageWatch.Application.Monitoring.IMonitoringAnalysisClient? monitoringAnalysisClient = null,
+        string monitoringRosterSource = "local",
+        GarageWatch.Application.Monitoring.IMonitoringRosterClient? monitoringRosterClient = null,
+        string monitoringRetentionSource = "local",
+        GarageWatch.Application.Monitoring.IMonitoringRetentionClient? monitoringRetentionClient = null,
+        string monitoringBiometricsSource = "local",
+        GarageWatch.Application.Monitoring.IMonitoringBiometricClient? monitoringBiometricClient = null)
     {
         _profileSource = profileSource;
         _loggerProvider = loggerProvider;
@@ -57,7 +81,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         _cameraConnectionManager = cameraConnectionManager;
         _monitoringMode = monitoringMode;
         _monitoringStatusSource = monitoringStatusSource;
+        _monitoringClipsSource = monitoringClipsSource;
+        _monitoringEventsSource = monitoringEventsSource;
+        _monitoringAnalysisSource = monitoringAnalysisSource;
+        _monitoringRosterSource = monitoringRosterSource;
+        _monitoringRetentionSource = monitoringRetentionSource;
+        _monitoringBiometricsSource = monitoringBiometricsSource;
         _monitoringCaptureClient = monitoringCaptureClient;
+        _monitoringClipsClient = monitoringClipsClient;
+        _monitoringEventsClient = monitoringEventsClient;
+        _monitoringAnalysisClient = monitoringAnalysisClient;
+        _monitoringRosterClient = monitoringRosterClient;
+        _monitoringRetentionClient = monitoringRetentionClient;
+        _monitoringBiometricClient = monitoringBiometricClient;
     }
 
     public string DatabasePath => _databasePath;
@@ -76,7 +112,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["CAPTURE_SPOOL_DIRECTORY"] = _captureSpoolPath,
             ["MONITORING_EXECUTION_MODE"] = _monitoringMode,
             ["MONITORING_STATUS_SOURCE"] = _monitoringStatusSource,
-            ["MONITORING_BASE_URL"] = "http://monitoring.invalid"
+            ["MONITORING_CLIPS_SOURCE"] = _monitoringClipsSource,
+            ["MONITORING_EVENTS_SOURCE"] = _monitoringEventsSource,
+            ["MONITORING_ANALYSIS_SOURCE"] = _monitoringAnalysisSource,
+            ["MONITORING_ROSTER_SOURCE"] = _monitoringRosterSource,
+            ["MONITORING_RETENTION_SOURCE"] = _monitoringRetentionSource,
+            ["MONITORING_BIOMETRICS_SOURCE"] = _monitoringBiometricsSource,
+            ["MONITORING_BASE_URL"] = "http://monitoring.invalid",
+            ["MONITORING_SERVICE_TOKEN_SECRET"] = "test-monitoring-service-secret-0123456789abcdef"
         }));
         if (_loggerProvider is not null)
         {
@@ -117,6 +160,36 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringCaptureClient>();
                 services.AddSingleton(_monitoringCaptureClient);
+            }
+            if (_monitoringClipsClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringClipsClient>();
+                services.AddSingleton(_monitoringClipsClient);
+            }
+            if (_monitoringEventsClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringEventsClient>();
+                services.AddSingleton(_monitoringEventsClient);
+            }
+            if (_monitoringAnalysisClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringAnalysisClient>();
+                services.AddSingleton(_monitoringAnalysisClient);
+            }
+            if (_monitoringRosterClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringRosterClient>();
+                services.AddSingleton(_monitoringRosterClient);
+            }
+            if (_monitoringRetentionClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringRetentionClient>();
+                services.AddSingleton(_monitoringRetentionClient);
+            }
+            if (_monitoringBiometricClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringBiometricClient>();
+                services.AddSingleton(_monitoringBiometricClient);
             }
         });
     }

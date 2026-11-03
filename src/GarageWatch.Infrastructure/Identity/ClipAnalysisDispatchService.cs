@@ -2,7 +2,9 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Capture;
+using GarageWatch.Infrastructure.Monitoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace GarageWatch.Infrastructure.Identity;
@@ -19,9 +21,13 @@ public sealed class ClipAnalysisCapacityException : Exception;
 
 public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitOfWork unitOfWork,
     IIamAuditEventRepository audit, AccessProfileService profiles, CaptureOptions capture,
-    ClipAnalysisDispatchOptions options, TimeProvider timeProvider, IPublicIdGenerator publicIds)
+    ClipAnalysisDispatchOptions options, TimeProvider timeProvider, IPublicIdGenerator publicIds,
+    IMonitoringAnalysisClient? remoteAnalysis = null, MonitoringModuleOptions? monitoring = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private bool RemoteAnalysis => monitoring?.AnalysisSource == MonitoringModuleOptions.Remote;
+    private IMonitoringAnalysisClient RemoteClient => remoteAnalysis ??
+        throw new MonitoringAnalysisUnavailableException();
 
     public async Task<ClipAnalysisPolicyView> GetPolicyAsync(Guid actorId, string cameraId,
         CancellationToken cancellationToken)
@@ -32,12 +38,19 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         if (!await profiles.IsAllowedAsync(actorId,
                 new PermissionRequest("clips.read", scope.ContextId, scope.CameraId), cancellationToken))
             throw new KeyNotFoundException();
-        var policy = await database.ClipAnalysisDispatchPolicies.AsNoTracking().SingleOrDefaultAsync(
-            item => item.CameraId == scope.CameraId, cancellationToken);
         var canRequest = await profiles.IsAllowedAsync(actorId,
             new PermissionRequest("clips.analysis.request", scope.ContextId, scope.CameraId), cancellationToken);
         var canManage = await profiles.IsAllowedAsync(actorId,
             new PermissionRequest("clips.analysis.policy.manage", scope.ContextId, scope.CameraId), cancellationToken);
+        if (RemoteAnalysis)
+        {
+            var remote = await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken) ??
+                throw new MonitoringAnalysisUnavailableException();
+            return new(scope.CameraPublicId, scope.ContextPublicId, remote.Policy, remote.Version,
+                remote.UpdatedAtUtc, canRequest, canManage);
+        }
+        var policy = await database.ClipAnalysisDispatchPolicies.AsNoTracking().SingleOrDefaultAsync(
+            item => item.CameraId == scope.CameraId, cancellationToken);
         return new(scope.CameraPublicId, scope.ContextPublicId, policy?.Policy ?? ClipAnalysisPolicies.ManualOnly,
             policy?.Version ?? 0, policy?.UpdatedAtUtc, canRequest, canManage);
     }
@@ -53,6 +66,27 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         if (!await profiles.IsAllowedAsync(actorId, new PermissionRequest("clips.analysis.policy.manage", scope.ContextId,
                 scope.CameraId), cancellationToken)) throw new UnauthorizedAccessException();
 
+        if (RemoteAnalysis)
+        {
+            MonitoringAnalysisPolicy updated;
+            try
+            {
+                updated = await RemoteClient.UpdatePolicyAsync(scope.CameraId, scope.ContextId, expectedVersion,
+                    policy, actorId.ToString("D"), cancellationToken) ??
+                    throw new MonitoringAnalysisUnavailableException();
+            }
+            catch (MonitoringAnalysisConflictException)
+            {
+                throw new ClipAnalysisConflictException("policy_version_conflict");
+            }
+            await unitOfWork.ExecuteAtomicallyAsync(token =>
+            {
+                Audit(actorId, "clip.analysis.policy.updated", cameraId);
+                return Task.CompletedTask;
+            }, cancellationToken);
+            return new ClipAnalysisPolicyResult(scope.CameraPublicId, scope.ContextPublicId, updated.Policy,
+                updated.Version, updated.UpdatedAtUtc);
+        }
         return await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
             var current = await database.ClipAnalysisDispatchPolicies.SingleOrDefaultAsync(item =>
@@ -105,9 +139,38 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
             }, cancellationToken);
             throw new UnauthorizedAccessException();
         }
+        var analysisVersion = requestedAnalysisVersion ?? options.DefaultAnalysisVersion;
+        if (RemoteAnalysis)
+        {
+            try
+            {
+                var job = await RemoteClient.EnqueueAsync(new MonitoringAnalysisEnqueue(clip.ClipId, clip.PublicId!,
+                        scope.CameraId, scope.ContextId, idempotencyKey, analysisVersion, "manual"),
+                    cancellationToken) ?? throw new MonitoringAnalysisUnavailableException();
+                return new ClipAnalysisJobResult(job.PublicId, job.ClipPublicId, job.AnalysisVersion, job.State,
+                    job.Existing);
+            }
+            catch (MonitoringAnalysisConflictException exception)
+            {
+                throw new ClipAnalysisConflictException(exception.Message);
+            }
+            catch (MonitoringAnalysisCapacityException)
+            {
+                throw new ClipAnalysisCapacityException();
+            }
+            catch (MonitoringAnalysisDeniedException exception)
+            {
+                await unitOfWork.ExecuteAtomicallyAsync(token =>
+                {
+                    Audit(actorId, "clip.analysis.request.denied", clip.ClipId);
+                    return Task.CompletedTask;
+                }, cancellationToken);
+                throw new ClipAnalysisDeniedException(exception.Message);
+            }
+        }
         try
         {
-            return await EnqueueAsync(clip, scope, idempotencyKey, requestedAnalysisVersion ?? options.DefaultAnalysisVersion,
+            return await EnqueueAsync(clip, scope, idempotencyKey, analysisVersion,
                 "manual", actorId, false, cancellationToken);
         }
         catch (ClipAnalysisDeniedException)
@@ -126,29 +189,41 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         if (clip.State != "ready" || !await IsMediaIntactAsync(clip, cancellationToken)) return;
         var scope = await FindEnabledCameraAsync(clip.CameraId, cancellationToken);
         if (scope is null) return;
-        var policy = await database.ClipAnalysisDispatchPolicies.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.CameraId == scope.CameraId, cancellationToken);
-        if (policy is null || policy.Policy == ClipAnalysisPolicies.ManualOnly || policy.Policy == ClipAnalysisPolicies.Never)
-            return;
-        if (policy.Policy == ClipAnalysisPolicies.LargeMotion && !HasVersionedLargeMotionEvidence(clip))
-            return;
+        string? effectivePolicy;
+        if (RemoteAnalysis)
+            effectivePolicy = (await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken))?.Policy;
+        else
+            effectivePolicy = (await database.ClipAnalysisDispatchPolicies.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.CameraId == scope.CameraId, cancellationToken))?.Policy;
+        if (effectivePolicy is null or ClipAnalysisPolicies.ManualOnly or ClipAnalysisPolicies.Never) return;
+        if (effectivePolicy == ClipAnalysisPolicies.LargeMotion && !HasVersionedLargeMotionEvidence(clip)) return;
         try
         {
-            await EnqueueAsync(clip, scope, DeterministicKey(clip.ClipId, options.DefaultAnalysisVersion),
-                options.DefaultAnalysisVersion, "automatic", null, true, cancellationToken);
+            if (RemoteAnalysis)
+                await RemoteClient.EnqueueAsync(new MonitoringAnalysisEnqueue(clip.ClipId, clip.PublicId!,
+                    scope.CameraId, scope.ContextId, DeterministicKey(clip.ClipId, options.DefaultAnalysisVersion),
+                    options.DefaultAnalysisVersion, "automatic"), cancellationToken);
+            else
+                await EnqueueAsync(clip, scope, DeterministicKey(clip.ClipId, options.DefaultAnalysisVersion),
+                    options.DefaultAnalysisVersion, "automatic", null, true, cancellationToken);
         }
-        catch (ClipAnalysisCapacityException)
+        catch (Exception exception) when (exception is ClipAnalysisCapacityException or ClipAnalysisDeniedException
+            or MonitoringAnalysisCapacityException or MonitoringAnalysisDeniedException
+            or MonitoringAnalysisUnavailableException)
         {
-            // Analysis capacity is intentionally isolated from capture and clip assembly.
-        }
-        catch (ClipAnalysisDeniedException)
-        {
-            // A concurrent policy change to never must not affect the capture or clip lifecycle.
+            // Dispatch failures are intentionally isolated from capture and clip assembly.
         }
     }
 
-    public Task<ClipAnalysisJobResult?> ClaimNextAsync(CancellationToken cancellationToken) =>
-        unitOfWork.ExecuteAtomicallyAsync(async token =>
+    public async Task<ClipAnalysisJobResult?> ClaimNextAsync(CancellationToken cancellationToken)
+    {
+        if (RemoteAnalysis)
+        {
+            var remote = await RemoteClient.ClaimAsync(cancellationToken);
+            return remote is null ? null : new ClipAnalysisJobResult(remote.PublicId, remote.ClipPublicId,
+                remote.AnalysisVersion, remote.State, remote.Existing);
+        }
+        return await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
             var now = timeProvider.GetUtcNow();
             await ReconcileExpiredLeasesAsync(now, token);
@@ -164,6 +239,7 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
             var clip = await ReadReadyClipByInternalIdAsync(job.ClipId, token);
             return clip is null ? null : Map(job, false, clip.PublicId!);
         }, cancellationToken);
+    }
 
     private async Task<ClipAnalysisJobResult> EnqueueAsync(ClipManifestV1 clip, CameraScope scope, Guid key,
         string analysisVersion, string requestKind, Guid? actorId, bool automatic, CancellationToken cancellationToken) =>

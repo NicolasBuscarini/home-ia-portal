@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace GarageWatch.Application.Monitoring;
 
 public sealed record MonitoringModuleContract(
@@ -53,6 +55,30 @@ public interface IMonitoringModuleClient
         CancellationToken cancellationToken = default);
 }
 
+public interface IMonitoringClipsClient
+{
+    Task<MonitoringClipPage?> ListAsync(MonitoringClipQuery query,
+        CancellationToken cancellationToken = default);
+
+    Task<MonitoringClipItem?> GetAsync(string publicId, CancellationToken cancellationToken = default);
+
+    Task<HttpResponseMessage?> GetThumbnailAsync(string publicId,
+        CancellationToken cancellationToken = default);
+
+    Task<HttpResponseMessage?> GetMediaAsync(string publicId, string? range,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record MonitoringClipQuery(IReadOnlyList<string> CameraIds, DateTimeOffset? FromUtc,
+    DateTimeOffset? ToUtc, string? State, int Page, int PageSize);
+
+public sealed record MonitoringClipItem(string PublicId, string ClipId, string CameraId,
+    DateTimeOffset StartedAtUtc, DateTimeOffset EndedAtUtc, string State, string ArchiveStatus,
+    string TriggerReason, string TriggerConfigVersion, string? MediaSha256, string? ThumbnailSha256,
+    int AttemptCount, DateTimeOffset UpdatedAtUtc, long? SizeBytes);
+
+public sealed record MonitoringClipPage(IReadOnlyList<MonitoringClipItem> Items, int Page, int PageSize, int Total);
+
 public interface IMonitoringCaptureClient
 {
     Task<MonitoringCaptureSnapshot?> GetCaptureAsync(CancellationToken cancellationToken = default);
@@ -60,3 +86,118 @@ public interface IMonitoringCaptureClient
     Task<MonitoringCaptureSettings?> UpdateCaptureAsync(MonitoringCaptureSettings settings,
         CancellationToken cancellationToken = default);
 }
+
+public interface IMonitoringEventsClient
+{
+    Task<MonitoringEventAppendOutcome?> AppendAsync(MonitoringEventEnvelope envelope,
+        CancellationToken cancellationToken = default);
+
+    Task<MonitoringEventRecovery?> GetRecoveryAsync(CancellationToken cancellationToken = default);
+}
+
+public sealed record MonitoringEventEnvelope(string SchemaVersion, string EventSha256, JsonElement Event);
+
+public sealed record MonitoringEventAppendOutcome(string Status, bool CapacityReached);
+
+public sealed record MonitoringEventRecovery(int RecoveredEvents, int InvalidEvents, long JournalBytes);
+
+public interface IMonitoringRosterClient
+{
+    Task<MonitoringRosterPage> ListAsync(int page, int pageSize,
+        CancellationToken cancellationToken = default);
+
+    Task<MonitoringRosterPerson> CreateAsync(MonitoringRosterCreateRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task RemoveAsync(string publicId, CancellationToken cancellationToken = default);
+}
+
+public sealed record MonitoringRosterCreateRequest(string DisplayName, string Purpose, bool AuthorizationConfirmed);
+
+public sealed record MonitoringRosterPerson(string PublicId, string DisplayName, string Purpose,
+    DateTimeOffset AuthorizationRecordedAtUtc, DateTimeOffset CreatedAtUtc, long Version);
+
+public sealed record MonitoringRosterPage(IReadOnlyList<MonitoringRosterPerson> Items, int Page, int PageSize,
+    int Total);
+
+public sealed class MonitoringRosterUnavailableException()
+    : Exception("monitoring_roster_unavailable");
+
+public interface IMonitoringRetentionClient
+{
+    Task<MonitoringRetentionPolicy?> GetPolicyAsync(string cameraId,
+        CancellationToken cancellationToken = default);
+
+    Task<MonitoringRetentionPolicy> UpdatePolicyAsync(string cameraId, long expectedVersion, int retentionDays,
+        int? maximumStorageGigabytes, CancellationToken cancellationToken = default);
+
+    Task<MonitoringPreservation> SetPreservationAsync(string clipPublicId, long expectedVersion, bool isPreserved,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<MonitoringPreservation>> ListPreservationsAsync(
+        IReadOnlyCollection<string> clipPublicIds, CancellationToken cancellationToken = default);
+}
+
+public sealed record MonitoringRetentionPolicy(string CameraId, int RetentionDays,
+    int? MaximumStorageGigabytes, long Version, DateTimeOffset? UpdatedAtUtc);
+
+public sealed record MonitoringPreservation(string ClipPublicId, bool IsPreserved, long Version);
+
+public sealed class MonitoringRetentionUnavailableException()
+    : Exception("monitoring_retention_unavailable");
+
+public sealed class MonitoringRetentionRejectedException(string code) : Exception(code);
+
+public interface IMonitoringBiometricClient
+{
+    Task<IReadOnlyList<MonitoringBiometricEnrollment>> ListAsync(string userPublicId,
+        CancellationToken cancellationToken = default);
+
+    Task<MonitoringBiometricEnrollment> GetAsync(string publicId,
+        CancellationToken cancellationToken = default);
+
+    Task<MonitoringBiometricEnrollmentResult> EnrollAsync(MonitoringBiometricEnrollRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task RevokeAsync(string publicId, string reason, CancellationToken cancellationToken = default);
+}
+
+public sealed record MonitoringBiometricEnrollRequest(string UserPublicId, byte[] EmbeddingCiphertext,
+    byte[] EmbeddingNonce, byte[] EmbeddingTag, string KeyVersion, int Dimensions, string ModelId,
+    string ModelVersion, string EmbeddingSchemaVersion, string AdapterId, string ConsentVersion);
+
+public sealed record MonitoringBiometricEnrollmentResult(MonitoringBiometricEnrollment Enrollment,
+    IReadOnlyList<string> ReplacedPublicIds);
+
+public sealed record MonitoringBiometricEnrollment(string PublicId, string UserPublicId, string Status,
+    DateTimeOffset EnrolledAtUtc, DateTimeOffset ExpiresAtUtc, DateTimeOffset? RevokedAtUtc, string RevokedReason,
+    string ModelId, string ModelVersion, int Dimensions, string KeyVersion, string ConsentVersion,
+    DateTimeOffset ConsentAcceptedAtUtc);
+
+public sealed class MonitoringBiometricsUnavailableException()
+    : Exception("monitoring_biometrics_unavailable");
+
+public sealed class MonitoringBiometricsRejectedException(string code) : Exception(code);
+
+public interface IMonitoringLiveClient
+{
+    Task<string?> GetPlaylistAsync(string cameraId, CancellationToken cancellationToken = default);
+
+    Task<MonitoringLiveSegment?> GetSegmentAsync(string cameraId, string segmentId, string? range,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record MonitoringLiveSegment(int StatusCode, string ContentType, byte[] Content,
+    string? ContentRange);
+
+public interface IMonitoringClipMediaClient
+{
+    Task<MonitoringClipMediaResult?> AssembleAsync(MonitoringClipMediaRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record MonitoringClipMediaRequest(string ClipId, string CameraId,
+    IReadOnlyList<string> SegmentIds, DateTimeOffset RequestedStartedAt, DateTimeOffset RequestedEndedAt);
+
+public sealed record MonitoringClipMediaResult(string MediaFileName, string MediaSha256,
+    string ThumbnailFileName, string ThumbnailSha256);

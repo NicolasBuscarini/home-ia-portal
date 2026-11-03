@@ -11,6 +11,7 @@ public sealed record KnownPersonResult(string PublicId, string DisplayName, stri
     DateTimeOffset AuthorizationRecordedAtUtc, DateTimeOffset CreatedAtUtc, long Version);
 public sealed class KnownPersonService(IamDbContext database, IIamUnitOfWork unitOfWork,
     IIamAuditEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds)
+    : IKnownPeopleGateway
 {
     public async Task<KnownPersonResult> CreateAsync(Guid actorId, string? displayName, string? purpose,
         bool authorizationConfirmed, CancellationToken cancellationToken)

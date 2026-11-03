@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using GarageWatch.Api.Contracts;
 using GarageWatch.Api.Errors;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
@@ -12,7 +13,7 @@ public sealed class UpdateClipPreservationEndpoint() : BaseEndpoint("Clip preser
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapPut("/api/v1/clips/{clipId}/preservation", async (string clipId,
             UpdateClipPreservationRequest request, HttpContext context, ClaimsPrincipal principal,
-            UserManager<ApplicationUser> users, ClipRetentionService retention, CancellationToken cancellationToken) =>
+            UserManager<ApplicationUser> users, IClipRetentionGateway retention, CancellationToken cancellationToken) =>
         {
             if (!EndpointSecurity.IsSameOrigin(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
             var actor = await users.GetUserAsync(principal);
@@ -25,6 +26,7 @@ public sealed class UpdateClipPreservationEndpoint() : BaseEndpoint("Clip preser
             catch (ArgumentException) { return Results.BadRequest(new ApiErrorResponse("invalid_clip_preservation")); }
             catch (KeyNotFoundException) { return Results.NotFound(); }
             catch (ClipRetentionConflictException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
+            catch (MonitoringRetentionUnavailableException) { return Results.Json(new ApiErrorResponse("monitoring_retention_unavailable"), statusCode: StatusCodes.Status503ServiceUnavailable); }
         }).RequireAuthorization("Administrator").Produces<ClipPreservationSettings>()
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)

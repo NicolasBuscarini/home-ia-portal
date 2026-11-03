@@ -1,7 +1,9 @@
 using GarageWatch.Api.Endpoints;
 using GarageWatch.Application.Cameras;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Capture;
 using GarageWatch.Infrastructure.Identity;
+using GarageWatch.Infrastructure.Monitoring;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -14,7 +16,9 @@ public sealed class GetSegmentEndpoint() : BaseEndpoint("Live video", "GetLiveSe
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/live/{cameraId}/segments/{segmentId}", async (string cameraId, string segmentId,
             ClaimsPrincipal principal, UserManager<ApplicationUser> users, ICameraResourceAccess cameraAccess,
-            IamDbContext database, CaptureOptions captureOptions, LocalSegmentSpool spool, CancellationToken cancellationToken) =>
+            IamDbContext database, CaptureOptions captureOptions, MonitoringModuleOptions monitoringOptions,
+            IMonitoringLiveClient liveClient, HttpContext httpContext, LocalSegmentSpool spool,
+            CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);
             if (user is null || !user.IsActive) return Results.Unauthorized();
@@ -23,6 +27,18 @@ public sealed class GetSegmentEndpoint() : BaseEndpoint("Live video", "GetLiveSe
                 .Select(item => item.CameraId).SingleOrDefaultAsync(cancellationToken);
             if (!string.Equals(internalCameraId, captureOptions.CameraId, StringComparison.Ordinal) ||
                 !LocalSegmentSpool.IsSafeSegmentId(segmentId)) return Results.NotFound();
+            if (monitoringOptions.LiveSource == MonitoringModuleOptions.Remote)
+            {
+                var remote = await liveClient.GetSegmentAsync(internalCameraId!, segmentId,
+                    httpContext.Request.Headers.Range.ToString(), cancellationToken);
+                if (remote is null) return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                httpContext.Response.StatusCode = remote.StatusCode;
+                httpContext.Response.ContentType = remote.ContentType;
+                if (!string.IsNullOrEmpty(remote.ContentRange))
+                    httpContext.Response.Headers.ContentRange = remote.ContentRange;
+                await httpContext.Response.Body.WriteAsync(remote.Content, cancellationToken);
+                return Results.Empty;
+            }
             var item = spool.GetRecentSegments(captureOptions.MaximumSegments)
                 .FirstOrDefault(x => x.Manifest.SegmentId == segmentId);
             return item.Manifest is null ? Results.NotFound()

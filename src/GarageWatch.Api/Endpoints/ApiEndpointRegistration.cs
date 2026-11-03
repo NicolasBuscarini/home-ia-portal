@@ -25,6 +25,7 @@ public static class ApiEndpointRegistration
             new Admin.GetCameraConnectionEndpoint(), new Admin.UpdateCameraConnectionEndpoint(),
             new Admin.GetClipTriggerConfigurationEndpoint(), new Admin.UpdateClipTriggerConfigurationEndpoint(),
             new Admin.GetMonitoringCaptureEndpoint(), new Admin.UpdateMonitoringCaptureEndpoint(),
+            new Admin.GetPlatformSettingsEndpoint(), new Admin.UpdatePlatformSettingsEndpoint(),
             new Admin.ListUsersEndpoint(), new Admin.GetUserEndpoint(), new Admin.DeactivateUserEndpoint(),
             new Admin.ListPermissionCatalogEndpoint(), new Admin.ListAccessProfilesEndpoint(),
             new Admin.CreateAccessProfileEndpoint(), new Admin.PublishAccessProfileVersionEndpoint(),

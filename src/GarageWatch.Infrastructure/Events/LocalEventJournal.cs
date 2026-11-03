@@ -6,10 +6,8 @@ using GarageWatch.Application.Events;
 namespace GarageWatch.Infrastructure.Events;
 
 public sealed record EventJournalEnvelopeV1(string SchemaVersion, string EventSha256, EventOccurrenceV1 Event);
-public sealed record EventJournalRecoveryResult(int RecoveredEvents, int InvalidEvents, long JournalBytes);
-public enum EventAppendStatus { Created, Duplicate, CapacityReached }
 
-public sealed class LocalEventJournal(EventEngineOptions options)
+public sealed class LocalEventJournal(EventEngineOptions options) : IEventJournal
 {
     private static readonly Meter Meter = new("GarageWatch.Events", "1.0.0");
     private static readonly Counter<long> Appended = Meter.CreateCounter<long>("garagewatch.events.appended");

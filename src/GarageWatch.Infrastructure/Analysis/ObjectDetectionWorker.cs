@@ -24,13 +24,13 @@ public sealed class ObjectDetectionWorker : BackgroundService
     private readonly ILogger<ObjectDetectionWorker> _logger;
     private readonly EventEngineOptions _eventOptions;
     private readonly VersionedEventRuleEngine _eventEngine;
-    private readonly LocalEventJournal _eventJournal;
+    private readonly IEventJournal _eventJournal;
     private int _disabled;
     private long _segmentsSeen;
 
     public ObjectDetectionWorker(CaptureOptions capture, OnnxDetectorOptions options, DetectionProcessor processor,
         ILogger<ObjectDetectionWorker> logger, EventEngineOptions? eventOptions = null,
-        VersionedEventRuleEngine? eventEngine = null, LocalEventJournal? eventJournal = null)
+        VersionedEventRuleEngine? eventEngine = null, IEventJournal? eventJournal = null)
     {
         _capture = capture;
         _options = options;

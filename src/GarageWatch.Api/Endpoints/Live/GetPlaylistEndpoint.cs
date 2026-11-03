@@ -1,8 +1,10 @@
 using GarageWatch.Api.Endpoints;
 using GarageWatch.Api.Live;
 using GarageWatch.Application.Cameras;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Capture;
 using GarageWatch.Infrastructure.Identity;
+using GarageWatch.Infrastructure.Monitoring;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
@@ -16,6 +18,7 @@ public sealed class GetPlaylistEndpoint() : BaseEndpoint("Live video", "GetLiveP
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/live/{cameraId}/index.m3u8", async (string cameraId, ClaimsPrincipal principal,
             UserManager<ApplicationUser> users, IamDbContext database, ICameraResourceAccess cameraAccess, CaptureOptions captureOptions,
+            MonitoringModuleOptions monitoringOptions, IMonitoringLiveClient liveClient,
             LocalSegmentSpool spool, LivePlaylistSequence playlistSequence, CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);
@@ -24,6 +27,13 @@ public sealed class GetPlaylistEndpoint() : BaseEndpoint("Live video", "GetLiveP
             var internalCameraId = await database.CameraCatalog.AsNoTracking().Where(item => item.PublicId == cameraId)
                 .Select(item => item.CameraId).SingleOrDefaultAsync(cancellationToken);
             if (!string.Equals(internalCameraId, captureOptions.CameraId, StringComparison.Ordinal)) return Results.NotFound();
+            if (monitoringOptions.LiveSource == MonitoringModuleOptions.Remote)
+            {
+                var remotePlaylist = await liveClient.GetPlaylistAsync(internalCameraId!, cancellationToken);
+                return remotePlaylist is null
+                    ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
+                    : Results.Text(remotePlaylist, "application/vnd.apple.mpegurl");
+            }
             var segments = spool.GetRecentSegments(6);
             if (segments.Count == 0) return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
             var target = Math.Max(1, (int)Math.Ceiling(segments.Max(x =>

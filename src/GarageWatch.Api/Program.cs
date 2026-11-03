@@ -28,6 +28,8 @@ builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.W
 builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
 builder.Services.AddScoped<CorrelationContext>();
 builder.Services.AddScoped<ICorrelationContext>(services => services.GetRequiredService<CorrelationContext>());
+var platformSettings = PlatformSettingsFile.LoadOrCreate(builder.Configuration);
+builder.Configuration.AddInMemoryCollection(PlatformSettingsFile.ToConfiguration(platformSettings.Values));
 builder.Services.AddPlatformInfrastructure(builder.Configuration);
 builder.Services.AddSingleton<LivePlaylistSequence>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);

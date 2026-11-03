@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using GarageWatch.Api.Contracts;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
@@ -9,7 +10,7 @@ public sealed class ListKnownPeopleEndpoint() : BaseEndpoint("Known people", "Ad
     "List consent-backed people", "Lists active minimal roster records; no face images or embeddings are stored.")
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
-        routes.MapGet("/api/v1/admin/known-people", async (int? page, int? pageSize, KnownPersonService people,
+        routes.MapGet("/api/v1/admin/known-people", async (int? page, int? pageSize, IKnownPeopleGateway people,
             CancellationToken cancellationToken) =>
         {
             var currentPage = page ?? 1;
@@ -22,9 +23,15 @@ public sealed class ListKnownPeopleEndpoint() : BaseEndpoint("Known people", "Ad
                     item.CreatedAtUtc, item.Version)).ToArray(), result.Page, result.PageSize, result.Total));
             }
             catch (ArgumentOutOfRangeException) { return Results.BadRequest(new ApiErrorResponse("invalid_pagination")); }
+            catch (MonitoringRosterUnavailableException)
+            {
+                return Results.Json(new ApiErrorResponse("monitoring_roster_unavailable"),
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
         }).RequireAuthorization("Administrator")
             .Produces<KnownPersonPageResponse>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }
 
@@ -33,7 +40,7 @@ public sealed class CreateKnownPersonEndpoint() : BaseEndpoint("Known people", "
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapPost("/api/v1/admin/known-people", async (CreateKnownPersonRequest request, HttpContext context,
-            ClaimsPrincipal principal, UserManager<ApplicationUser> users, KnownPersonService people,
+            ClaimsPrincipal principal, UserManager<ApplicationUser> users, IKnownPeopleGateway people,
             CancellationToken cancellationToken) =>
         {
             if (!EndpointSecurity.IsSameOrigin(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -46,9 +53,15 @@ public sealed class CreateKnownPersonEndpoint() : BaseEndpoint("Known people", "
                 return Results.Created($"/api/v1/admin/known-people/{created.PublicId}", created);
             }
             catch (ArgumentException) { return Results.BadRequest(new ApiErrorResponse("invalid_known_person")); }
+            catch (MonitoringRosterUnavailableException)
+            {
+                return Results.Json(new ApiErrorResponse("monitoring_roster_unavailable"),
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
         }).RequireAuthorization("Administrator")
             .Produces<KnownPersonResult>(StatusCodes.Status201Created)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }
 
@@ -57,7 +70,7 @@ public sealed class RemoveKnownPersonEndpoint() : BaseEndpoint("Known people", "
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapDelete("/api/v1/admin/known-people/{personId}", async (string personId, HttpContext context,
-            ClaimsPrincipal principal, UserManager<ApplicationUser> users, KnownPersonService people,
+            ClaimsPrincipal principal, UserManager<ApplicationUser> users, IKnownPeopleGateway people,
             CancellationToken cancellationToken) =>
         {
             if (!EndpointSecurity.IsSameOrigin(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -69,8 +82,14 @@ public sealed class RemoveKnownPersonEndpoint() : BaseEndpoint("Known people", "
                 return Results.NoContent();
             }
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("known_person_not_found")); }
+            catch (MonitoringRosterUnavailableException)
+            {
+                return Results.Json(new ApiErrorResponse("monitoring_roster_unavailable"),
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
         }).RequireAuthorization("Administrator")
             .Produces(StatusCodes.Status204NoContent)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
+            .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }

@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using GarageWatch.Application.Authorization;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
+using GarageWatch.Infrastructure.Monitoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace GarageWatch.Infrastructure.Capture;
@@ -14,9 +16,15 @@ public sealed record ClipPage(IReadOnlyList<ClipListItem> Items, int Page, int P
 public sealed record ClipDetails(ClipListItem Clip, string? MediaUrl, string? MediaSha256,
     string? ThumbnailSha256, int AttemptCount,
     DateTimeOffset UpdatedAtUtc);
+public sealed record ClipReadResult(ClipDetails? Details, string? MediaPath, string? ThumbnailPath,
+    bool RemoteMedia = false, bool RemoteThumbnail = false);
 
-public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext database, AccessProfileService profiles)
+public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext database, AccessProfileService profiles,
+    IMonitoringClipsClient? remoteClips = null, MonitoringModuleOptions? monitoring = null,
+    IMonitoringAnalysisClient? remoteAnalysis = null, IClipRetentionGateway? retention = null)
 {
+    private bool RemoteClips => monitoring?.ClipsSource == MonitoringModuleOptions.Remote;
+    private bool RemoteAnalysis => monitoring?.AnalysisSource == MonitoringModuleOptions.Remote;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<ClipPage> ListAsync(Guid userId, bool isAdministrator, string? cameraId,
@@ -41,6 +49,23 @@ public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext data
         if (cameraId is not null && !allowedCameras.Any(camera => camera.PublicId == cameraId && accessible.Contains(camera.CameraId)))
             return new([], page, pageSize, 0);
 
+        if (RemoteClips)
+        {
+            var remote = await remoteClips!.ListAsync(new MonitoringClipQuery(accessible.ToArray(), fromUtc, toUtc,
+                state, page, pageSize), cancellationToken);
+            if (remote is null) throw new InvalidOperationException("monitoring_clips_unavailable");
+            var remoteIds = remote.Items.Select(item => item.PublicId).ToArray();
+            var remotePreservation = await PreservationStatesAsync(remoteIds, cancellationToken);
+            var remoteJobs = await RemoteAnalysisStatesAsync(remote.Items, cancellationToken);
+            var publicIds = allowedCameras.ToDictionary(camera => camera.CameraId, camera => camera.PublicId!,
+                StringComparer.Ordinal);
+            var remoteItems = remote.Items.Select(item => MapRemote(item,
+                remoteJobs.GetValueOrDefault(item.PublicId) ?? "not_requested",
+                publicIds.GetValueOrDefault(item.CameraId, item.CameraId),
+                remotePreservation.GetValueOrDefault(item.PublicId))).ToArray();
+            return new ClipPage(remoteItems, remote.Page, remote.PageSize, remote.Total);
+        }
+
         var directory = ManifestDirectory;
         if (!Directory.Exists(directory)) return new([], page, pageSize, 0);
         var clips = new List<ClipManifestV1>();
@@ -60,10 +85,8 @@ public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext data
                 continue;
             clips.Add(clip);
         }
-        var ids = clips.Select(clip => clip.ClipId).ToArray();
-        var preservationStates = await database.ClipPreservations.AsNoTracking()
-            .Where(item => ids.Contains(item.ClipId))
-            .ToDictionaryAsync(item => item.ClipId, item => (item.IsPreserved, item.Version), cancellationToken);
+        var ids = clips.Select(clip => clip.PublicId!).ToArray();
+        var preservationStates = await PreservationStatesAsync(ids, cancellationToken);
         var latestJobs = new Dictionary<string, ClipAnalysisJob>(StringComparer.Ordinal);
         foreach (var chunk in ids.Chunk(500))
         {
@@ -79,32 +102,51 @@ public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext data
             StringComparer.Ordinal);
         var items = ordered.Skip((page - 1) * pageSize).Take(pageSize).Select(clip => Map(clip,
             latestJobs.GetValueOrDefault(clip.ClipId)?.State ?? "not_requested", cameraPublicIds[clip.CameraId],
-            preservationStates.GetValueOrDefault(clip.ClipId))).ToArray();
+            preservationStates.GetValueOrDefault(clip.PublicId!))).ToArray();
         return new(items, page, pageSize, ordered.Length);
     }
 
-    public async Task<(ClipDetails? Details, string? MediaPath, string? ThumbnailPath)> GetAsync(Guid userId,
+    public async Task<ClipReadResult> GetAsync(Guid userId,
         bool isAdministrator, string publicId, CancellationToken cancellationToken)
     {
-        if (!PublicIdFormat.IsValid(publicId, PublicIdPrefixes.ClipPrefix)) return (null, null, null);
+        if (!PublicIdFormat.IsValid(publicId, PublicIdPrefixes.ClipPrefix)) return new(null, null, null);
+        if (RemoteClips)
+        {
+            var remote = await remoteClips!.GetAsync(publicId, cancellationToken);
+            if (remote is null) return new(null, null, null);
+            var remoteCamera = await database.CameraCatalog.AsNoTracking().Where(item => item.CameraId == remote.CameraId &&
+                item.IsEnabled && item.Context.IsEnabled).Select(item => new { item.CameraId, item.PublicId, item.ContextId })
+                .SingleOrDefaultAsync(cancellationToken);
+            if (remoteCamera is null || (!isAdministrator && !await profiles.IsAllowedAsync(userId,
+                    new PermissionRequest("clips.read", remoteCamera.ContextId, remoteCamera.CameraId), cancellationToken)))
+                return new(null, null, null);
+            var remoteStates = await RemoteAnalysisStatesAsync([remote], cancellationToken);
+            var remotePreservation = await PreservationStatesAsync([remote.PublicId], cancellationToken);
+            var remoteItem = MapRemote(remote,
+                remoteStates.GetValueOrDefault(remote.PublicId) ?? "not_requested", remoteCamera.PublicId!,
+                remotePreservation.GetValueOrDefault(remote.PublicId));
+            return new ClipReadResult(new ClipDetails(remoteItem, remoteItem.SizeBytes is null
+                    ? null
+                    : $"/api/v1/clips/{publicId}/media", remote.MediaSha256, remote.ThumbnailSha256,
+                remote.AttemptCount, remote.UpdatedAtUtc), null, null, true, true);
+        }
         var clip = await FindManifestByPublicIdAsync(publicId, cancellationToken);
-        if (clip is null) return (null, null, null);
+        if (clip is null) return new(null, null, null);
         var camera = await database.CameraCatalog.AsNoTracking().Where(item => item.CameraId == clip.CameraId &&
             item.IsEnabled && item.Context.IsEnabled).Select(item => new { item.CameraId, item.PublicId, item.ContextId })
             .SingleOrDefaultAsync(cancellationToken);
         if (camera is null || (!isAdministrator && !await profiles.IsAllowedAsync(userId,
                 new PermissionRequest("clips.read", camera.ContextId, camera.CameraId), cancellationToken)))
-            return (null, null, null);
+            return new(null, null, null);
 
         var job = await database.ClipAnalysisJobs.AsNoTracking().Where(item => item.ClipId == clip.ClipId)
             .OrderByDescending(item => item.CreatedAtUtc).FirstOrDefaultAsync(cancellationToken);
-        var preservationState = await database.ClipPreservations.AsNoTracking().Where(item => item.ClipId == clip.ClipId)
-            .Select(item => new { item.IsPreserved, item.Version }).SingleOrDefaultAsync(cancellationToken);
+        var preservationState = await PreservationStatesAsync([clip.PublicId!], cancellationToken);
         var item = Map(clip, job?.State ?? "not_requested", camera.PublicId!,
-            (preservationState?.IsPreserved ?? false, preservationState?.Version ?? 0));
+            preservationState.GetValueOrDefault(clip.PublicId!));
         var mediaPath = ResolveMedia(clip);
         var thumbnailPath = ResolveThumbnail(clip);
-        return (new(item, mediaPath is null ? null : $"/api/v1/clips/{publicId}/media",
+        return new(new ClipDetails(item, mediaPath is null ? null : $"/api/v1/clips/{publicId}/media",
             clip.MediaSha256, clip.ThumbnailSha256, clip.AttemptCount, clip.UpdatedAt),
             mediaPath, thumbnailPath);
     }
@@ -144,6 +186,45 @@ public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext data
             clip.ArchiveStatus, analysisStatus, thumbnail is null ? null : $"/api/v1/clips/{clip.PublicId}/thumbnail",
             size, clip.TriggerReason, clip.TriggerConfigVersion, preservation.IsPreserved, preservation.Version);
     }
+
+    private async Task<Dictionary<string, (bool IsPreserved, long Version)>> PreservationStatesAsync(
+        string[] clipPublicIds, CancellationToken cancellationToken)
+    {
+        if (clipPublicIds.Length == 0) return new(StringComparer.Ordinal);
+        return await (retention ?? throw new InvalidOperationException("clip_retention_gateway_unavailable"))
+            .GetPreservationStatesAsync(clipPublicIds, cancellationToken);
+    }
+
+    private async Task<Dictionary<string, string>> RemoteAnalysisStatesAsync(
+        IReadOnlyCollection<MonitoringClipItem> clips, CancellationToken cancellationToken)
+    {
+        if (!RemoteAnalysis || remoteAnalysis is null) return new(StringComparer.Ordinal);
+        var jobs = await remoteAnalysis.LatestForClipsAsync(clips.Select(clip => clip.PublicId).ToArray(),
+            cancellationToken) ?? throw new MonitoringAnalysisUnavailableException();
+        return jobs.ToDictionary(job => job.ClipPublicId, job => job.State, StringComparer.Ordinal);
+    }
+
+    private async Task<Dictionary<string, ClipAnalysisJob>> LatestJobsAsync(string[] clipIds,
+        CancellationToken cancellationToken)
+    {
+        var latest = new Dictionary<string, ClipAnalysisJob>(StringComparer.Ordinal);
+        foreach (var chunk in clipIds.Chunk(500))
+        {
+            var jobs = await database.ClipAnalysisJobs.AsNoTracking().Where(job => chunk.Contains(job.ClipId))
+                .OrderByDescending(job => job.CreatedAtUtc).ToArrayAsync(cancellationToken);
+            foreach (var job in jobs)
+                if (!latest.TryGetValue(job.ClipId, out var current) || job.CreatedAtUtc > current.CreatedAtUtc)
+                    latest[job.ClipId] = job;
+        }
+        return latest;
+    }
+
+    private static ClipListItem MapRemote(MonitoringClipItem clip, string analysisStatus, string cameraPublicId,
+        (bool IsPreserved, long Version) preservation = default) =>
+        new(clip.PublicId, cameraPublicId, clip.StartedAtUtc, clip.EndedAtUtc, clip.State, clip.ArchiveStatus,
+            analysisStatus, clip.ThumbnailSha256 is null ? null : $"/api/v1/clips/{clip.PublicId}/thumbnail",
+            clip.SizeBytes, clip.TriggerReason, clip.TriggerConfigVersion, preservation.IsPreserved,
+            preservation.Version);
 
     private async Task<ClipManifestV1?> FindManifestByPublicIdAsync(string publicId, CancellationToken cancellationToken)
     {

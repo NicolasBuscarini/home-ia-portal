@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using GarageWatch.Api.Contracts;
 using GarageWatch.Api.Errors;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
@@ -26,10 +27,13 @@ public sealed class UpdateClipAnalysisDispatchPolicyEndpoint() : BaseEndpoint("C
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("analysis_resource_not_found")); }
             catch (ClipAnalysisConflictException) { return Results.Conflict(new ApiErrorResponse("policy_version_conflict")); }
             catch (UnauthorizedAccessException) { return Results.Forbid(); }
+            catch (MonitoringAnalysisUnavailableException) { return Results.Json(new ApiErrorResponse("analysis_dispatch_unavailable"), statusCode: StatusCodes.Status503ServiceUnavailable); }
+
         }).RequireAuthorization()
             .Produces<ClipAnalysisPolicyResult>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
+            .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }

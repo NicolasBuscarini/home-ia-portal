@@ -13,7 +13,7 @@ public sealed class ListBiometricEnrollmentsEndpoint() : BaseEndpoint("Biometric
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/biometrics/enrollments", async (string? userPublicId, ClaimsPrincipal principal,
-            UserManager<ApplicationUser> users, BiometricEnrollmentService enrollments,
+            UserManager<ApplicationUser> users, IBiometricEnrollmentGateway enrollments,
             CancellationToken cancellationToken) =>
         {
             var actor = await users.GetUserAsync(principal);
@@ -25,9 +25,15 @@ public sealed class ListBiometricEnrollmentsEndpoint() : BaseEndpoint("Biometric
             }
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("biometric_enrollment_not_found")); }
             catch (UnauthorizedAccessException) { return Results.StatusCode(StatusCodes.Status403Forbidden); }
+            catch (BiometricEnrollmentUnavailableException exception)
+            {
+                return Results.Json(new ApiErrorResponse(exception.Message),
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
         }).RequireAuthorization()
             .Produces<BiometricEnrollmentResponse[]>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
+            .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 
     internal static BiometricEnrollmentResponse Map(BiometricEnrollmentSummary item) => new(item.PublicId,
@@ -41,7 +47,7 @@ public sealed class EnrollBiometricEndpoint() : BaseEndpoint("Biometrics", "Enro
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapPost("/api/v1/biometrics/enrollments", async (EnrollBiometricRequest request, HttpContext context,
-            ClaimsPrincipal principal, UserManager<ApplicationUser> users, BiometricEnrollmentService enrollments,
+            ClaimsPrincipal principal, UserManager<ApplicationUser> users, IBiometricEnrollmentGateway enrollments,
             CancellationToken cancellationToken) =>
         {
             if (!EndpointSecurity.IsSameOrigin(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -101,7 +107,7 @@ public sealed class RevokeBiometricEnrollmentEndpoint() : BaseEndpoint("Biometri
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapDelete("/api/v1/biometrics/enrollments/{enrollmentId}", async (string enrollmentId, HttpContext context,
-            ClaimsPrincipal principal, UserManager<ApplicationUser> users, BiometricEnrollmentService enrollments,
+            ClaimsPrincipal principal, UserManager<ApplicationUser> users, IBiometricEnrollmentGateway enrollments,
             CancellationToken cancellationToken) =>
         {
             if (!EndpointSecurity.IsSameOrigin(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -114,8 +120,16 @@ public sealed class RevokeBiometricEnrollmentEndpoint() : BaseEndpoint("Biometri
             }
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("biometric_enrollment_not_found")); }
             catch (UnauthorizedAccessException) { return Results.StatusCode(StatusCodes.Status403Forbidden); }
+            catch (ArgumentException) { return Results.BadRequest(new ApiErrorResponse("invalid_biometric_enrollment")); }
+            catch (BiometricEnrollmentUnavailableException exception)
+            {
+                return Results.Json(new ApiErrorResponse(exception.Message),
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
         }).RequireAuthorization()
             .Produces(StatusCodes.Status204NoContent)
+            .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+            .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }
