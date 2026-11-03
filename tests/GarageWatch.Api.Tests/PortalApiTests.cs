@@ -26,6 +26,13 @@ public sealed class PortalApiTests
         Assert.Contains("monitoring", adminModules);
         Assert.Contains("activitywatch", adminModules);
         Assert.Contains("administration", adminModules);
+        var adminMonitoring = adminJson.RootElement.GetProperty("modules").EnumerateArray()
+            .Single(item => item.GetProperty("moduleId").GetString() == "monitoring");
+        var adminMonitoringItems = adminMonitoring.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("itemId").GetString()).ToArray();
+        Assert.Equal(8, adminMonitoringItems.Length);
+        Assert.Equal("monitor", adminMonitoringItems[0]);
+        Assert.Contains("people", adminMonitoringItems);
 
         var viewerId = await CreateUserAsync(factory, "portal-viewer", "Viewer");
         var administratorId = await GetUserIdAsync(factory, "contract-user");
@@ -41,6 +48,10 @@ public sealed class PortalApiTests
             .Select(item => item.GetProperty("moduleId").GetString()).ToArray();
         Assert.Single(viewerModules);
         Assert.Equal("monitoring", viewerModules[0]);
+        var viewerMonitoring = viewerJson.RootElement.GetProperty("modules").EnumerateArray().Single();
+        var viewerMonitoringItems = viewerMonitoring.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("itemId").GetString()).ToArray();
+        Assert.Equal(new[] { "monitor", "clips" }, viewerMonitoringItems);
 
         await CreateUserAsync(factory, "portal-user", "User");
         using var user = await LoginAsync(factory, "portal-user", "Viewer-Password-123!");
@@ -61,6 +72,9 @@ public sealed class PortalApiTests
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         Assert.Equal("wellness", createdJson.RootElement.GetProperty("moduleId").GetString());
         Assert.Equal(1, createdJson.RootElement.GetProperty("version").GetInt64());
+        var createdItems = createdJson.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("itemId").GetString()).ToArray();
+        Assert.Equal(new[] { "overview" }, createdItems);
 
         using var duplicate = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules", ModuleBody("wellness"));
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
@@ -70,17 +84,37 @@ public sealed class PortalApiTests
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
 
         using var updated = await admin.PutAsJsonAsync("/api/v1/admin/portal-modules/wellness",
-            UpdateModuleBody("wellness", 1, "wellness.name"));
+            UpdateModuleBody("wellness", 1, "wellness.name",
+            [
+                new { itemId = "summary", labelKey = "menu.summary", sortOrder = 10, requiredPermission = (string?)null },
+                new { itemId = "settings", labelKey = "menu.settings", sortOrder = 20, requiredPermission = "clips.read" }
+            ]));
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         using var updatedJson = JsonDocument.Parse(await updated.Content.ReadAsStringAsync());
         Assert.Equal(2, updatedJson.RootElement.GetProperty("version").GetInt64());
         Assert.Equal("wellness.name", updatedJson.RootElement.GetProperty("displayNameKey").GetString());
+        var updatedItems = updatedJson.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("itemId").GetString()).ToArray();
+        Assert.Equal(new[] { "summary", "settings" }, updatedItems);
 
         using var invalid = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules", ModuleBody("Bad Id"));
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
         using var unknownPermission = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules",
             ModuleBody("unknown-permission", "does.not.exist"));
         Assert.Equal(HttpStatusCode.BadRequest, unknownPermission.StatusCode);
+        using var duplicateItems = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules",
+            ModuleBody("duplicate-items", items:
+            [
+                new { itemId = "overview", labelKey = "menu.overview", sortOrder = 10, requiredPermission = (string?)null },
+                new { itemId = "overview", labelKey = "menu.other", sortOrder = 20, requiredPermission = (string?)null }
+            ]));
+        Assert.Equal(HttpStatusCode.BadRequest, duplicateItems.StatusCode);
+        using var unknownItemPermission = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules",
+            ModuleBody("unknown-item-permission", items:
+            [
+                new { itemId = "overview", labelKey = "menu.overview", sortOrder = 10, requiredPermission = "does.not.exist" }
+            ]));
+        Assert.Equal(HttpStatusCode.BadRequest, unknownItemPermission.StatusCode);
 
         using var noOrigin = factory.CreateClient();
         await AuthenticateAsync(noOrigin, "contract-user", "Contract-Password-123!");
@@ -231,36 +265,40 @@ public sealed class PortalApiTests
         return new CameraFixture(camera.PublicId!, camera.ContextPublicId!, camera.ContextId, camera.CameraId);
     }
 
-    private static object ModuleBody(string moduleId, string? requiredPermission = "clips.read") => new
-    {
-        moduleId,
-        displayNameKey = $"{moduleId}.name",
-        contractVersion = "1.0",
-        apiBaseUrl = "http://127.0.0.1:5174",
-        healthPath = "/health/ready",
-        requiredPermission,
-        menuGroup = "integrations",
-        menuOrder = 20,
-        menuIcon = "module",
-        menuLabelKey = $"{moduleId}.menu",
-        isEnabled = true
-    };
+    private static object ModuleBody(string moduleId, string? requiredPermission = "clips.read",
+        object[]? items = null) => new
+        {
+            moduleId,
+            displayNameKey = $"{moduleId}.name",
+            contractVersion = "1.0",
+            apiBaseUrl = "http://127.0.0.1:5174",
+            healthPath = "/health/ready",
+            requiredPermission,
+            menuGroup = "integrations",
+            menuOrder = 20,
+            menuIcon = "module",
+            menuLabelKey = $"{moduleId}.menu",
+            isEnabled = true,
+            items = items ?? [new { itemId = "overview", labelKey = "menu.overview", sortOrder = 10, requiredPermission = (string?)null }]
+        };
 
-    private static object UpdateModuleBody(string moduleId, long version, string displayNameKey) => new
-    {
-        version,
-        moduleId,
-        displayNameKey,
-        contractVersion = "1.0",
-        apiBaseUrl = "http://127.0.0.1:5174",
-        healthPath = "/health/ready",
-        requiredPermission = "clips.read",
-        menuGroup = "integrations",
-        menuOrder = 20,
-        menuIcon = "module",
-        menuLabelKey = $"{moduleId}.menu",
-        isEnabled = true
-    };
+    private static object UpdateModuleBody(string moduleId, long version, string displayNameKey,
+        object[]? items = null) => new
+        {
+            version,
+            moduleId,
+            displayNameKey,
+            contractVersion = "1.0",
+            apiBaseUrl = "http://127.0.0.1:5174",
+            healthPath = "/health/ready",
+            requiredPermission = "clips.read",
+            menuGroup = "integrations",
+            menuOrder = 20,
+            menuIcon = "module",
+            menuLabelKey = $"{moduleId}.menu",
+            isEnabled = true,
+            items = items ?? [new { itemId = "overview", labelKey = "menu.overview", sortOrder = 10, requiredPermission = (string?)null }]
+        };
 
     private static object DecisionBody(string audience, string residenceId, string[] permissionKeys,
         object[] scopes) => new { audience, residenceId, permissionKeys, scopes };

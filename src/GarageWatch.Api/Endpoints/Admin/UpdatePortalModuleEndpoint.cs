@@ -23,7 +23,9 @@ public sealed class UpdatePortalModuleEndpoint() : BaseEndpoint("Portal administ
                 var updated = await catalog.UpdateAsync(actor.Id, moduleId, request.Version,
                     new PortalModuleUpsert(request.ModuleId, request.DisplayNameKey, request.ContractVersion,
                         request.ApiBaseUrl, request.HealthPath, request.RequiredPermission, request.MenuGroup,
-                        request.MenuOrder, request.MenuIcon, request.MenuLabelKey, request.IsEnabled),
+                        request.MenuOrder, request.MenuIcon, request.MenuLabelKey, request.IsEnabled,
+                        request.Items?.Select(item => new PortalModuleItemUpsert(item.ItemId, item.LabelKey,
+                            item.SortOrder, item.RequiredPermission)).ToArray()),
                     cancellationToken);
                 return Results.Ok(updated);
             }

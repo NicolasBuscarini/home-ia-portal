@@ -175,6 +175,8 @@ public sealed class IamDatabaseInitializer(
         }
         if (seededPortalModule) await database.SaveChangesAsync(cancellationToken);
 
+        await EnsurePortalSubmodulesAsync(cancellationToken);
+
         await MigrateLegacyCameraGrantsAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
@@ -234,6 +236,44 @@ public sealed class IamDatabaseInitializer(
             await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(updated, ManifestJsonOptions), cancellationToken);
             File.Move(temporary, path, true);
         }
+    }
+
+    private static readonly (string ModuleId, string ItemId, string LabelKey, int SortOrder, string? RequiredPermission)[]
+        DefaultPortalSubmodules =
+        [
+            ("monitoring", "monitor", "dashboard.menu.monitor", 10, null),
+            ("monitoring", "clips", "dashboard.menu.clips", 20, null),
+            ("monitoring", "clip-settings", "dashboard.menu.clipSettings", 30, "admin.configuration.manage"),
+            ("monitoring", "health", "dashboard.menu.health", 40, "admin.system.health.read"),
+            ("monitoring", "dependencies", "dashboard.menu.dependencies", 50, "admin.system.health.read"),
+            ("monitoring", "capture", "dashboard.menu.capture", 60, "admin.configuration.manage"),
+            ("monitoring", "cameras", "dashboard.menu.cameras", 70, "admin.configuration.manage"),
+            ("monitoring", "people", "dashboard.menu.people", 80, "admin.configuration.manage"),
+            ("administration", "users", "dashboard.menu.users", 10, "admin.users.manage"),
+            ("administration", "profiles", "dashboard.menu.profiles", 20, "admin.permissions.manage"),
+            ("administration", "requests", "dashboard.menu.accessRequests", 30, "admin.users.manage")
+        ];
+
+    private async Task EnsurePortalSubmodulesAsync(CancellationToken cancellationToken)
+    {
+        var modules = await database.PortalModules.Include(module => module.Items)
+            .ToArrayAsync(cancellationToken);
+        var changed = false;
+        foreach (var (moduleId, itemId, labelKey, sortOrder, requiredPermission) in DefaultPortalSubmodules)
+        {
+            var module = modules.SingleOrDefault(candidate => candidate.ModuleId == moduleId);
+            if (module is null || module.Items.Any(item => item.ItemId == itemId)) continue;
+            module.Items.Add(new PortalModuleMenuItem
+            {
+                ModuleId = moduleId,
+                ItemId = itemId,
+                LabelKey = labelKey,
+                SortOrder = sortOrder,
+                RequiredPermission = requiredPermission
+            });
+            changed = true;
+        }
+        if (changed) await database.SaveChangesAsync(cancellationToken);
     }
 
     private async Task MigrateLegacyCameraGrantsAsync(CancellationToken cancellationToken)

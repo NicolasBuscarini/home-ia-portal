@@ -16,6 +16,17 @@ public sealed class PortalModule
     public long Version { get; set; } = 1;
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
+    public List<PortalModuleMenuItem> Items { get; set; } = [];
+}
+
+public sealed class PortalModuleMenuItem
+{
+    public string ModuleId { get; set; } = string.Empty;
+    public string ItemId { get; set; } = string.Empty;
+    public string LabelKey { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
+    public string? RequiredPermission { get; set; }
+    public PortalModule? Module { get; set; }
 }
 
 public sealed class PortalUserPreference

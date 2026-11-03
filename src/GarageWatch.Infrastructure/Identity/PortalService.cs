@@ -21,7 +21,8 @@ public sealed class PortalService(
         CancellationToken cancellationToken = default)
     {
         ValidatePage(page, pageSize);
-        var query = database.PortalModules.AsNoTracking().OrderBy(module => module.ModuleId);
+        var query = database.PortalModules.AsNoTracking().Include(module => module.Items)
+            .OrderBy(module => module.ModuleId);
         var total = await query.CountAsync(cancellationToken);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(cancellationToken);
         return new(items.Select(Map).ToArray(), page, pageSize, total);
@@ -52,6 +53,7 @@ public sealed class PortalService(
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
+        ApplyItems(entity, normalized.Items!);
         database.PortalModules.Add(entity);
         auditEvents.Append(actorUserId, null, "portal_module.created", entity.ModuleId, now);
         return Map(entity);
@@ -64,7 +66,8 @@ public sealed class PortalService(
             await EnsureAdministratorAsync(actorUserId);
             if (expectedVersion < 1) throw new PortalValidationException("Versão inválida.");
             var normalized = Normalize(request, moduleId);
-            var entity = await database.PortalModules.SingleOrDefaultAsync(module => module.ModuleId == moduleId, token)
+            var entity = await database.PortalModules.Include(module => module.Items)
+                .SingleOrDefaultAsync(module => module.ModuleId == moduleId, token)
                 ?? throw new PortalNotFoundException("Módulo não encontrado.");
             if (entity.Version != expectedVersion)
                 throw new PortalConflictException("O módulo mudou; atualize a consulta e tente novamente.");
@@ -80,6 +83,7 @@ public sealed class PortalService(
             entity.MenuIcon = normalized.MenuIcon;
             entity.MenuLabelKey = normalized.MenuLabelKey;
             entity.IsEnabled = normalized.IsEnabled;
+            ApplyItems(entity, normalized.Items!);
             entity.Version++;
             entity.UpdatedAtUtc = now;
             auditEvents.Append(actorUserId, null,
@@ -90,7 +94,7 @@ public sealed class PortalService(
     public async Task<PortalNavigation> GetNavigationAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var administrator = await IsAdministratorAsync(userId);
-        var modules = await database.PortalModules.AsNoTracking()
+        var modules = await database.PortalModules.AsNoTracking().Include(module => module.Items)
             .Where(module => module.IsEnabled)
             .OrderBy(module => module.MenuGroup).ThenBy(module => module.MenuOrder).ThenBy(module => module.ModuleId)
             .ToArrayAsync(cancellationToken);
@@ -100,9 +104,17 @@ public sealed class PortalService(
             if (!administrator && module.RequiredPermission is not null &&
                 !await profiles.IsAllowedAnyCameraAsync(userId, module.RequiredPermission, cancellationToken))
                 continue;
+            var items = new List<PortalNavigationItem>();
+            foreach (var item in module.Items.OrderBy(item => item.SortOrder).ThenBy(item => item.ItemId))
+            {
+                if (!administrator && item.RequiredPermission is not null &&
+                    !await profiles.IsAllowedAnyCameraAsync(userId, item.RequiredPermission, cancellationToken))
+                    continue;
+                items.Add(new PortalNavigationItem(item.ItemId, item.LabelKey, item.SortOrder));
+            }
             visible.Add(new PortalNavigationModule(module.ModuleId, module.DisplayNameKey, module.ContractVersion,
                 module.MenuGroup, module.MenuOrder, module.MenuIcon, module.MenuLabelKey,
-                $"/modules/{module.ModuleId}"));
+                $"/modules/{module.ModuleId}", items));
         }
         return new PortalNavigation(options.ResidenceId, timeProvider.GetUtcNow(), visible);
     }
@@ -281,8 +293,62 @@ public sealed class PortalService(
             throw new PortalValidationException("menuOrder inválido.");
         var menuIcon = ValidateText(request.MenuIcon, "menuIcon", 64);
         var menuLabelKey = ValidateText(request.MenuLabelKey, "menuLabelKey", 128);
+        var items = NormalizeItems(request.Items);
         return new PortalModuleUpsert(moduleId!, displayNameKey, contractVersion, apiBaseUrl, healthPath,
-            requiredPermission, menuGroup, request.MenuOrder, menuIcon, menuLabelKey, request.IsEnabled);
+            requiredPermission, menuGroup, request.MenuOrder, menuIcon, menuLabelKey, request.IsEnabled, items);
+    }
+
+    private static PortalModuleItemUpsert[] NormalizeItems(IReadOnlyList<PortalModuleItemUpsert>? items)
+    {
+        if (items is null) return [];
+        if (items.Count > 32) throw new PortalValidationException("Excesso de submenus no módulo.");
+        var normalized = new PortalModuleItemUpsert[items.Count];
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < items.Count; index++)
+        {
+            var item = items[index];
+            if (item is null) throw new PortalValidationException("Submenu inválido.");
+            var itemId = item.ItemId?.Trim();
+            if (string.IsNullOrWhiteSpace(itemId) || !IsSafeIdentifier(itemId))
+                throw new PortalValidationException("ID de submenu inválido.");
+            if (!seen.Add(itemId))
+                throw new PortalValidationException("ID de submenu duplicado.");
+            var labelKey = ValidateText(item.LabelKey, "items.labelKey", 128);
+            if (item.SortOrder is < 0 or > 10_000)
+                throw new PortalValidationException("items.sortOrder inválido.");
+            var requiredPermission = string.IsNullOrWhiteSpace(item.RequiredPermission)
+                ? null
+                : item.RequiredPermission.Trim();
+            if (requiredPermission is not null && !PermissionCatalog.TryGet(requiredPermission, out _))
+                throw new PortalValidationException("Permissão de submenu desconhecida.");
+            normalized[index] = new PortalModuleItemUpsert(itemId, labelKey, item.SortOrder, requiredPermission);
+        }
+        return normalized;
+    }
+
+    private static void ApplyItems(PortalModule module, IReadOnlyList<PortalModuleItemUpsert> items)
+    {
+        var desired = items.ToDictionary(item => item.ItemId, StringComparer.Ordinal);
+        foreach (var existing in module.Items.ToArray())
+        {
+            if (desired.Remove(existing.ItemId, out var item))
+            {
+                existing.LabelKey = item.LabelKey;
+                existing.SortOrder = item.SortOrder;
+                existing.RequiredPermission = item.RequiredPermission;
+                continue;
+            }
+            module.Items.Remove(existing);
+        }
+        foreach (var item in desired.Values)
+            module.Items.Add(new PortalModuleMenuItem
+            {
+                ModuleId = module.ModuleId,
+                ItemId = item.ItemId,
+                LabelKey = item.LabelKey,
+                SortOrder = item.SortOrder,
+                RequiredPermission = item.RequiredPermission
+            });
     }
 
     private static void ValidateModuleId(string? value)
@@ -351,5 +417,8 @@ public sealed class PortalService(
     private static PortalModuleRecord Map(PortalModule module) => new(module.ModuleId, module.DisplayNameKey,
         module.ContractVersion, module.ApiBaseUrl, module.HealthPath, module.RequiredPermission, module.MenuGroup,
         module.MenuOrder, module.MenuIcon, module.MenuLabelKey, module.IsEnabled, module.Version,
-        module.CreatedAtUtc, module.UpdatedAtUtc);
+        module.CreatedAtUtc, module.UpdatedAtUtc,
+        module.Items.OrderBy(item => item.SortOrder).ThenBy(item => item.ItemId)
+            .Select(item => new PortalModuleItemRecord(item.ItemId, item.LabelKey, item.SortOrder,
+                item.RequiredPermission)).ToArray());
 }

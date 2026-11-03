@@ -942,6 +942,33 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.ToTable("PortalModules");
                 });
 
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalModuleMenuItem", b =>
+                {
+                    b.Property<string>("ModuleId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ItemId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LabelKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequiredPermission")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ModuleId", "ItemId");
+
+                    b.ToTable("PortalModuleMenuItems");
+                });
+
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalUserPreference", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -1277,6 +1304,17 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.Navigation("UpdatedBy");
                 });
 
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalModuleMenuItem", b =>
+                {
+                    b.HasOne("GarageWatch.Infrastructure.Identity.PortalModule", "Module")
+                        .WithMany("Items")
+                        .HasForeignKey("ModuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Module");
+                });
+
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalUserPreference", b =>
                 {
                     b.HasOne("GarageWatch.Infrastructure.Identity.ApplicationUser", "User")
@@ -1382,6 +1420,11 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.CameraContext", b =>
                 {
                     b.Navigation("Cameras");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalModule", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.UserAccessProfileAssignment", b =>

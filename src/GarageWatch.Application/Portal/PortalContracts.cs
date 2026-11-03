@@ -19,6 +19,12 @@ public static class PortalPreferenceCatalog
         value is not null && LanguageValues.Contains(value, StringComparer.Ordinal);
 }
 
+public sealed record PortalModuleItemRecord(
+    string ItemId,
+    string LabelKey,
+    int SortOrder,
+    string? RequiredPermission);
+
 public sealed record PortalModuleRecord(
     string ModuleId,
     string DisplayNameKey,
@@ -33,10 +39,17 @@ public sealed record PortalModuleRecord(
     bool IsEnabled,
     long Version,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc,
+    IReadOnlyList<PortalModuleItemRecord> Items);
 
 public sealed record PortalModulePage(IReadOnlyList<PortalModuleRecord> Items, int Page, int PageSize,
     int TotalCount);
+
+public sealed record PortalModuleItemUpsert(
+    string ItemId,
+    string LabelKey,
+    int SortOrder,
+    string? RequiredPermission);
 
 public sealed record PortalModuleUpsert(
     string ModuleId,
@@ -49,7 +62,13 @@ public sealed record PortalModuleUpsert(
     int MenuOrder,
     string MenuIcon,
     string MenuLabelKey,
-    bool IsEnabled);
+    bool IsEnabled,
+    IReadOnlyList<PortalModuleItemUpsert>? Items = null);
+
+public sealed record PortalNavigationItem(
+    string ItemId,
+    string LabelKey,
+    int SortOrder);
 
 public sealed record PortalNavigationModule(
     string ModuleId,
@@ -59,7 +78,8 @@ public sealed record PortalNavigationModule(
     int MenuOrder,
     string MenuIcon,
     string MenuLabelKey,
-    string Route);
+    string Route,
+    IReadOnlyList<PortalNavigationItem> Items);
 
 public sealed record PortalNavigation(
     string ResidenceId,

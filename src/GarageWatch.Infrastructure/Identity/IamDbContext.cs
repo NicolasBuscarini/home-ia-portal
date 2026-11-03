@@ -37,6 +37,7 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
     public DbSet<ClipRetentionPolicy> ClipRetentionPolicies => Set<ClipRetentionPolicy>();
     public DbSet<ClipPreservation> ClipPreservations => Set<ClipPreservation>();
     public DbSet<PortalModule> PortalModules => Set<PortalModule>();
+    public DbSet<PortalModuleMenuItem> PortalModuleMenuItems => Set<PortalModuleMenuItem>();
     public DbSet<PortalUserPreference> PortalUserPreferences => Set<PortalUserPreference>();
     public DbSet<IntegrationCredential> IntegrationCredentials => Set<IntegrationCredential>();
 
@@ -329,6 +330,17 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
             entity.Property(module => module.CreatedAtUtc).HasConversion(UtcTicksConverter);
             entity.Property(module => module.UpdatedAtUtc).HasConversion(UtcTicksConverter);
             entity.HasIndex(module => new { module.IsEnabled, module.MenuGroup, module.MenuOrder });
+        });
+
+        builder.Entity<PortalModuleMenuItem>(entity =>
+        {
+            entity.HasKey(item => new { item.ModuleId, item.ItemId });
+            entity.Property(item => item.ModuleId).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.ItemId).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.LabelKey).HasMaxLength(128).IsRequired();
+            entity.Property(item => item.RequiredPermission).HasMaxLength(128);
+            entity.HasOne(item => item.Module).WithMany(module => module.Items)
+                .HasForeignKey(item => item.ModuleId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<PortalUserPreference>(entity =>

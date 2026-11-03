@@ -1,5 +1,11 @@
 namespace GarageWatch.Api.Contracts;
 
+public sealed record PortalModuleItemRequest(
+    string ItemId,
+    string LabelKey,
+    int SortOrder,
+    string? RequiredPermission);
+
 public sealed record CreatePortalModuleRequest(
     string ModuleId,
     string DisplayNameKey,
@@ -11,7 +17,8 @@ public sealed record CreatePortalModuleRequest(
     int MenuOrder,
     string MenuIcon,
     string MenuLabelKey,
-    bool IsEnabled = true);
+    bool IsEnabled = true,
+    IReadOnlyList<PortalModuleItemRequest>? Items = null);
 
 public sealed record UpdatePortalModuleRequest(
     long Version,
@@ -25,7 +32,8 @@ public sealed record UpdatePortalModuleRequest(
     int MenuOrder,
     string MenuIcon,
     string MenuLabelKey,
-    bool IsEnabled);
+    bool IsEnabled,
+    IReadOnlyList<PortalModuleItemRequest>? Items = null);
 
 public sealed record UpdatePortalPreferencesRequest(string ThemeId, string LanguageTag);
 

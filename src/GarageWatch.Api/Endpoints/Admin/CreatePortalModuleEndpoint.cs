@@ -39,5 +39,7 @@ public sealed class CreatePortalModuleEndpoint() : BaseEndpoint("Portal administ
     internal static PortalModuleUpsert ToUpsert(CreatePortalModuleRequest request, string moduleId) =>
         new(moduleId, request.DisplayNameKey, request.ContractVersion, request.ApiBaseUrl, request.HealthPath,
             request.RequiredPermission, request.MenuGroup, request.MenuOrder, request.MenuIcon,
-            request.MenuLabelKey, request.IsEnabled);
+            request.MenuLabelKey, request.IsEnabled,
+            request.Items?.Select(item => new PortalModuleItemUpsert(item.ItemId, item.LabelKey, item.SortOrder,
+                item.RequiredPermission)).ToArray());
 }
