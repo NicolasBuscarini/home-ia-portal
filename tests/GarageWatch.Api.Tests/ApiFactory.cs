@@ -126,7 +126,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["MONITORING_BIOMETRICS_SOURCE"] = _monitoringBiometricsSource,
             ["MONITORING_BASE_URL"] = "http://monitoring.invalid",
             ["MONITORING_SERVICE_TOKEN_SECRET"] = "test-monitoring-service-secret-0123456789abcdef",
-            ["ACTIVITYWATCH_BASE_URL"] = _activityWatchBaseUrl
+            ["ACTIVITYWATCH_BASE_URL"] = _activityWatchBaseUrl,
+            ["CREDENTIAL_ENCRYPTION_KEY"] = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
+            ["CREDENTIAL_ENCRYPTION_KEY_VERSION"] = "v1"
         }));
         if (_loggerProvider is not null)
         {

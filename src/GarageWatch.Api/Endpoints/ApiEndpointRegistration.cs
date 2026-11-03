@@ -36,6 +36,8 @@ public static class ApiEndpointRegistration
             new Admin.SelectFaceExtractorEndpoint(),
             new Admin.ListPortalModulesEndpoint(), new Admin.CreatePortalModuleEndpoint(),
             new Admin.UpdatePortalModuleEndpoint(),
+            new Admin.GetIntegrationCredentialEndpoint(), new Admin.SetIntegrationCredentialEndpoint(),
+            new Admin.RemoveIntegrationCredentialEndpoint(),
             new Portal.GetPortalNavigationEndpoint(), new Portal.GetPortalPreferencesEndpoint(),
             new Portal.UpdatePortalPreferencesEndpoint(), new Portal.CreatePortalAuthorizationDecisionEndpoint(),
             new Portal.GetActivityWatchSummaryEndpoint(),

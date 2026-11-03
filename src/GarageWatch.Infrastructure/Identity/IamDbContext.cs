@@ -38,6 +38,7 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
     public DbSet<ClipPreservation> ClipPreservations => Set<ClipPreservation>();
     public DbSet<PortalModule> PortalModules => Set<PortalModule>();
     public DbSet<PortalUserPreference> PortalUserPreferences => Set<PortalUserPreference>();
+    public DbSet<IntegrationCredential> IntegrationCredentials => Set<IntegrationCredential>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -338,6 +339,22 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
             entity.Property(preference => preference.UpdatedAtUtc).HasConversion(UtcTicksConverter);
             entity.HasOne(preference => preference.User).WithMany()
                 .HasForeignKey(preference => preference.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<IntegrationCredential>(entity =>
+        {
+            entity.HasKey(credential => credential.Id);
+            entity.Property(credential => credential.IntegrationId).HasMaxLength(64).IsRequired();
+            entity.Property(credential => credential.KeyVersion).HasMaxLength(32).IsRequired();
+            entity.Property(credential => credential.Nonce).IsRequired();
+            entity.Property(credential => credential.Ciphertext).IsRequired();
+            entity.Property(credential => credential.Tag).IsRequired();
+            entity.Property(credential => credential.Version).IsConcurrencyToken();
+            entity.Property(credential => credential.CreatedAtUtc).HasConversion(UtcTicksConverter);
+            entity.Property(credential => credential.UpdatedAtUtc).HasConversion(UtcTicksConverter);
+            entity.HasIndex(credential => credential.IntegrationId).IsUnique();
+            entity.HasOne(credential => credential.UpdatedBy).WithMany()
+                .HasForeignKey(credential => credential.UpdatedByUserId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 

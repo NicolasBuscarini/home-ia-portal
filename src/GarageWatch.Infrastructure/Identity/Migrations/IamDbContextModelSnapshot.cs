@@ -782,6 +782,57 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.ToTable("IamMigrationStates");
                 });
 
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IntegrationCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Ciphertext")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IntegrationId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("KeyVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Nonce")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<byte[]>("Tag")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IntegrationId")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("IntegrationCredentials");
+                });
+
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.KnownPerson", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1214,6 +1265,16 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.Navigation("Actor");
 
                     b.Navigation("Subject");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IntegrationCredential", b =>
+                {
+                    b.HasOne("GarageWatch.Infrastructure.Identity.ApplicationUser", "UpdatedBy")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UpdatedBy");
                 });
 
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalUserPreference", b =>

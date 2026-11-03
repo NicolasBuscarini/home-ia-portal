@@ -13,7 +13,8 @@ namespace GarageWatch.Infrastructure.Integrations;
 public sealed class ActivityWatchClient(
     IHttpClientFactory httpClientFactory,
     ActivityWatchOptions options,
-    TimeProvider timeProvider) : IActivityWatchModule
+    TimeProvider timeProvider,
+    IIntegrationCredentialStore credentials) : IActivityWatchModule
 {
     private const string ModuleId = "activitywatch";
     private const string SchemaVersion = "1.0";
@@ -30,8 +31,9 @@ public sealed class ActivityWatchClient(
 
         try
         {
+            var token = await ResolveTokenAsync(cancellationToken);
             using var client = httpClientFactory.CreateClient(ActivityWatchOptions.HttpClientName);
-            var buckets = await GetBucketsAsync(client, cancellationToken);
+            var buckets = await GetBucketsAsync(client, token, cancellationToken);
             if (buckets is null) return Unreachable(now, start, "activitywatch_invalid_response");
 
             var usage = new Dictionary<string, (double Seconds, int Count)>(StringComparer.Ordinal);
@@ -47,7 +49,7 @@ public sealed class ActivityWatchClient(
 
             foreach (var bucketId in bucketIds)
             {
-                var events = await GetEventsAsync(client, bucketId, start, now, cancellationToken);
+                var events = await GetEventsAsync(client, bucketId, start, now, token, cancellationToken);
                 if (events is null) return Unreachable(now, start, "activitywatch_invalid_response");
                 foreach (var item in events)
                 {
@@ -107,12 +109,26 @@ public sealed class ActivityWatchClient(
         {
             return Unreachable(now, start, "activitywatch_invalid_response");
         }
+        catch (IntegrationCredentialUnreadableException)
+        {
+            return Unreachable(now, start, "activitywatch_credential_unreadable");
+        }
     }
 
-    private async Task<Dictionary<string, BucketDto?>?> GetBucketsAsync(HttpClient client,
+    /// <summary>
+    /// Stored portal credential takes precedence over the environment token; the environment value
+    /// remains the documented rollback path. The value never leaves this call stack.
+    /// </summary>
+    private async Task<string?> ResolveTokenAsync(CancellationToken cancellationToken)
+    {
+        var stored = await credentials.ResolveAsync(IntegrationCredentialIds.ActivityWatch, cancellationToken);
+        return stored?.Value ?? options.ApiToken;
+    }
+
+    private async Task<Dictionary<string, BucketDto?>?> GetBucketsAsync(HttpClient client, string? token,
         CancellationToken cancellationToken)
     {
-        using var request = CreateRequest("api/0/buckets/");
+        using var request = CreateRequest("api/0/buckets/", token);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
         if (!response.IsSuccessStatusCode)
@@ -122,13 +138,13 @@ public sealed class ActivityWatchClient(
     }
 
     private async Task<EventDto[]?> GetEventsAsync(HttpClient client, string bucketId, DateTimeOffset start,
-        DateTimeOffset end, CancellationToken cancellationToken)
+        DateTimeOffset end, string? token, CancellationToken cancellationToken)
     {
         var path = $"api/0/buckets/{Uri.EscapeDataString(bucketId)}/events" +
                    $"?start={Uri.EscapeDataString(start.ToString("O", CultureInfo.InvariantCulture))}" +
                    $"&end={Uri.EscapeDataString(end.ToString("O", CultureInfo.InvariantCulture))}" +
                    $"&limit={MaxEventsPerBucket}";
-        using var request = CreateRequest(path);
+        using var request = CreateRequest(path, token);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
         if (!response.IsSuccessStatusCode)
@@ -137,11 +153,11 @@ public sealed class ActivityWatchClient(
                ?? throw new ActivityWatchResponseException(null);
     }
 
-    private HttpRequestMessage CreateRequest(string path)
+    private HttpRequestMessage CreateRequest(string path, string? token)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, path);
-        if (options.ApiToken is not null)
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiToken);
+        if (token is not null)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
     }
 

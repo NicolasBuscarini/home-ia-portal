@@ -41,7 +41,7 @@ public sealed class OpenApiEndpointTests
 
         var operations = json.RootElement.GetProperty("paths").EnumerateObject()
             .SelectMany(path => path.Value.EnumerateObject().Select(method => method.Value)).ToArray();
-        Assert.Equal(68, operations.Length);
+        Assert.Equal(71, operations.Length);
         var operationIds = operations.Select(operation => operation.GetProperty("operationId").GetString()).ToArray();
         Assert.Equal(operationIds.Length, operationIds.Distinct(StringComparer.Ordinal).Count());
         Assert.All(operations, operation =>
@@ -56,7 +56,7 @@ public sealed class OpenApiEndpointTests
         });
 
         var requestBodies = operations.Where(operation => operation.TryGetProperty("requestBody", out _)).ToArray();
-        Assert.Equal(27, requestBodies.Length);
+        Assert.Equal(28, requestBodies.Length);
         Assert.All(requestBodies, operation =>
         {
             var body = operation.GetProperty("requestBody");
@@ -86,6 +86,10 @@ public sealed class OpenApiEndpointTests
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "AdminUpdatePortalModule" &&
             operation.GetProperty("requestBody").GetProperty("content").TryGetProperty("application/json", out _));
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "GetPortalNavigation");
+        Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "GetIntegrationCredential");
+        Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "SetIntegrationCredential" &&
+            operation.GetProperty("requestBody").GetProperty("content").TryGetProperty("application/json", out _));
+        Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "RemoveIntegrationCredential");
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "GetMonitoringModuleHealth");
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "GetPortalPreferences");
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "UpdatePortalPreferences" &&

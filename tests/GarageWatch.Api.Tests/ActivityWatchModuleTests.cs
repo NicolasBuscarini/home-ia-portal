@@ -43,7 +43,8 @@ public sealed class ActivityWatchModuleTests
             });
         });
         var client = new ActivityWatchClient(new StubHttpClientFactory(handler),
-            new ActivityWatchOptions("http://activitywatch.test", "token-value", 3, 24), new FixedTimeProvider(now));
+            new ActivityWatchOptions("http://activitywatch.test", "token-value", 3, 24), new FixedTimeProvider(now),
+            new NullIntegrationCredentialStore());
 
         var summary = await client.GetSummaryAsync();
 
@@ -90,7 +91,8 @@ public sealed class ActivityWatchModuleTests
                 ? Json(new Dictionary<string, object> { ["window"] = new { type = "currentwindow" } })
                 : Json(events));
         var client = new ActivityWatchClient(new StubHttpClientFactory(handler),
-            new ActivityWatchOptions("http://activitywatch.test", null, 3, 24), new FixedTimeProvider(now));
+            new ActivityWatchOptions("http://activitywatch.test", null, 3, 24), new FixedTimeProvider(now),
+            new NullIntegrationCredentialStore());
 
         var summary = await client.GetSummaryAsync();
 
@@ -110,13 +112,13 @@ public sealed class ActivityWatchModuleTests
 
         var timeout = new ActivityWatchClient(
             new StubHttpClientFactory(new StubHttpMessageHandler(_ => throw new TaskCanceledException())),
-            options, new FixedTimeProvider(now));
+            options, new FixedTimeProvider(now), new NullIntegrationCredentialStore());
         Assert.Equal("activitywatch_timeout", (await timeout.GetSummaryAsync()).ErrorCode);
 
         var failing = new ActivityWatchClient(
             new StubHttpClientFactory(new StubHttpMessageHandler(_ =>
                 Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)))),
-            options, new FixedTimeProvider(now));
+            options, new FixedTimeProvider(now), new NullIntegrationCredentialStore());
         var failed = await failing.GetSummaryAsync();
         Assert.False(failed.Reachable);
         Assert.Equal("activitywatch_error", failed.ErrorCode);
@@ -128,7 +130,7 @@ public sealed class ActivityWatchModuleTests
                 {
                     Content = new StringContent("{\"not\":")
                 }))),
-            options, new FixedTimeProvider(now));
+            options, new FixedTimeProvider(now), new NullIntegrationCredentialStore());
         Assert.Equal("activitywatch_invalid_response", (await malformed.GetSummaryAsync()).ErrorCode);
     }
 
@@ -268,4 +270,21 @@ internal sealed class StubActivityWatchModule(ActivityWatchSummary summary) : IA
         Calls++;
         return Task.FromResult(summary);
     }
+}
+
+internal sealed class NullIntegrationCredentialStore : GarageWatch.Application.Portal.IIntegrationCredentialStore
+{
+    public Task<GarageWatch.Application.Portal.ResolvedIntegrationCredential?> ResolveAsync(string integrationId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<GarageWatch.Application.Portal.ResolvedIntegrationCredential?>(null);
+
+    public Task<GarageWatch.Application.Portal.IntegrationCredentialStatus> GetStatusAsync(string integrationId,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    public Task<GarageWatch.Application.Portal.IntegrationCredentialStatus> SetAsync(Guid actorUserId,
+        string integrationId, string secret, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public Task<GarageWatch.Application.Portal.IntegrationCredentialStatus> RemoveAsync(Guid actorUserId,
+        string integrationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }
