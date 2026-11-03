@@ -1,0 +1,25 @@
+# ActivityWatch server isolado para o laboratório Home IA.
+# Empacota o aw-server oficial (versão e checksum fixados) sem watchers/GUI.
+FROM debian:bookworm-slim AS fetch
+ARG ACTIVITYWATCH_VERSION=0.14.1
+ARG ACTIVITYWATCH_SHA256=dedb9e2f2059c764c0fd9f72093d417699b1121c8aced7cf6242eca17c799549
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl -sSL -o /tmp/aw.AppImage \
+      "https://github.com/ActivityWatch/activitywatch/releases/download/v${ACTIVITYWATCH_VERSION}/activitywatch-linux-x86_64.AppImage" \
+ && echo "${ACTIVITYWATCH_SHA256}  /tmp/aw.AppImage" | sha256sum -c - \
+ && chmod +x /tmp/aw.AppImage \
+ && cd /tmp && /tmp/aw.AppImage --appimage-extract >/dev/null
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=fetch /tmp/squashfs-root/aw-server /opt/aw-server
+ENV HOME=/data
+EXPOSE 5600
+VOLUME ["/data"]
+HEALTHCHECK --interval=15s --timeout=3s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:5600/api/0/info >/dev/null || exit 1
+ENTRYPOINT ["/opt/aw-server/aw-server", "--host", "0.0.0.0", "--port", "5600"]

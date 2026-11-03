@@ -75,6 +75,10 @@ services:
       DETECTOR_SAMPLE_EVERY_SEGMENTS: "${DETECTOR_SAMPLE_EVERY_SEGMENTS:-1}"
       BIOMETRIC_ENCRYPTION_KEY: "${BIOMETRIC_ENCRYPTION_KEY:-}"
       BIOMETRIC_ENCRYPTION_KEY_VERSION: "${BIOMETRIC_ENCRYPTION_KEY_VERSION:-}"
+      CREDENTIAL_ENCRYPTION_KEY: "${CREDENTIAL_ENCRYPTION_KEY:-}"
+      CREDENTIAL_ENCRYPTION_KEY_VERSION: "${CREDENTIAL_ENCRYPTION_KEY_VERSION:-}"
+      CREDENTIAL_ENCRYPTION_PREVIOUS_KEY: "${CREDENTIAL_ENCRYPTION_PREVIOUS_KEY:-}"
+      CREDENTIAL_ENCRYPTION_PREVIOUS_KEY_VERSION: "${CREDENTIAL_ENCRYPTION_PREVIOUS_KEY_VERSION:-}"
       EVENT_RULES_FILE: "${EVENT_RULES_FILE:-}"
       EVENT_JOURNAL_MAX_EVENTS: "${EVENT_JOURNAL_MAX_EVENTS:-10000}"
       EVENT_JOURNAL_MAX_BYTES: "${EVENT_JOURNAL_MAX_BYTES:-67108864}"
@@ -106,7 +110,7 @@ services:
       AUTH_EMAIL: "${AUTH_EMAIL:-}"
       NEOLINK_CONTROL_URL: "${NEOLINK_CONTROL_URL:-http://neolink:8555}"
       NEOLINK_CONTROL_TOKEN: "${NEOLINK_CONTROL_TOKEN:-}"
-      ACTIVITYWATCH_BASE_URL: "${ACTIVITYWATCH_BASE_URL:-http://host.docker.internal:5600}"
+      ACTIVITYWATCH_BASE_URL: "${ACTIVITYWATCH_BASE_URL:-http://activitywatch:5600}"
       ACTIVITYWATCH_API_TOKEN: "${ACTIVITYWATCH_API_TOKEN:-}"
       ACTIVITYWATCH_TIMEOUT_SECONDS: "${ACTIVITYWATCH_TIMEOUT_SECONDS:-3}"
       ACTIVITYWATCH_LOOKBACK_HOURS: "${ACTIVITYWATCH_LOOKBACK_HOURS:-24}"
@@ -421,6 +425,26 @@ services:
       - "127.0.0.1:5176:5176"
     command: sh -lc 'npm ci && npm run dev -- --host 0.0.0.0 --port 5176 --strictPort'
 
+  activitywatch:
+    image: garage-watch-activitywatch
+    build:
+      context: .
+      dockerfile: Dockerfile.activitywatch
+    cpus: "${PLATFORM_ACTIVITYWATCH_CPUS:-0.5}"
+    mem_limit: "${PLATFORM_ACTIVITYWATCH_MEMORY_LIMIT:-512m}"
+    init: true
+    volumes:
+      - activitywatch_data:/data
+    ports:
+      - "127.0.0.1:${ACTIVITYWATCH_HOST_PORT:-5600}:5600"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
 networks:
   rtsp_lab:
     name: garage-watch-rtsp-lab
@@ -432,3 +456,4 @@ volumes:
   monitoring_web_node_modules:
   platform_web_node_modules:
   activitywatch_web_node_modules:
+  activitywatch_data:
