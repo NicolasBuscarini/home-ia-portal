@@ -6,13 +6,11 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringBiometricClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringBiometricClient
+    IHttpClientFactory httpClientFactory) : IMonitoringBiometricClient
 {
     public async Task<IReadOnlyList<MonitoringBiometricEnrollment>> ListAsync(string userPublicId,
         CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -39,7 +37,6 @@ public sealed class MonitoringBiometricClient(
     public async Task<MonitoringBiometricEnrollment> GetAsync(string publicId,
         CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -67,7 +64,6 @@ public sealed class MonitoringBiometricClient(
     public async Task<MonitoringBiometricEnrollmentResult> EnrollAsync(
         MonitoringBiometricEnrollRequest request, CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -93,7 +89,6 @@ public sealed class MonitoringBiometricClient(
 
     public async Task RevokeAsync(string publicId, string reason, CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -117,9 +112,4 @@ public sealed class MonitoringBiometricClient(
         }
     }
 
-    private void EnsureRemote()
-    {
-        if (options.BiometricsSource != MonitoringModuleOptions.Remote)
-            throw new MonitoringBiometricsUnavailableException();
-    }
 }

@@ -20,11 +20,13 @@ public sealed record ClipReadResult(ClipDetails? Details, string? MediaPath, str
     bool RemoteMedia = false, bool RemoteThumbnail = false);
 
 public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext database, AccessProfileService profiles,
-    IMonitoringClipsClient? remoteClips = null, MonitoringModuleOptions? monitoring = null,
+    IMonitoringClipsClient? remoteClips = null,
     IMonitoringAnalysisClient? remoteAnalysis = null, IClipRetentionGateway? retention = null)
 {
-    private bool RemoteClips => monitoring?.ClipsSource == MonitoringModuleOptions.Remote;
-    private bool RemoteAnalysis => monitoring?.AnalysisSource == MonitoringModuleOptions.Remote;
+    // O portal não lista clipes localmente desde T16-REMOVE-EMBEDDED: a listagem e o
+    // detalhe vêm sempre do serviço de Monitoramento (ADR108).
+    private static bool RemoteClips => true;
+    private static bool RemoteAnalysis => true;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<ClipPage> ListAsync(Guid userId, bool isAdministrator, string? cameraId,

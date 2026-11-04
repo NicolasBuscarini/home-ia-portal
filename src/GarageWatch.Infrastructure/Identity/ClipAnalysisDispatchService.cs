@@ -22,10 +22,12 @@ public sealed class ClipAnalysisCapacityException : Exception;
 public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitOfWork unitOfWork,
     IIamAuditEventRepository audit, AccessProfileService profiles, CaptureOptions capture,
     ClipAnalysisDispatchOptions options, TimeProvider timeProvider, IPublicIdGenerator publicIds,
-    IMonitoringAnalysisClient? remoteAnalysis = null, MonitoringModuleOptions? monitoring = null)
+    IMonitoringAnalysisClient? remoteAnalysis = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private bool RemoteAnalysis => monitoring?.AnalysisSource == MonitoringModuleOptions.Remote;
+    // A análise é sempre executada pelo serviço de Monitoramento (ADR108); o portal mantém
+    // política, autorização, janela e auditoria.
+    private static bool RemoteAnalysis => true;
     private IMonitoringAnalysisClient RemoteClient => remoteAnalysis ??
         throw new MonitoringAnalysisUnavailableException();
 

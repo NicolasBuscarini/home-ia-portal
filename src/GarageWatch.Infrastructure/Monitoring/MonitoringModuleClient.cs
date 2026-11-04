@@ -5,17 +5,10 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringModuleClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringModuleClient
+    IHttpClientFactory httpClientFactory) : IMonitoringModuleClient
 {
-    private static readonly string[] InProcessCapabilities = ["camera.status", "health", "media.contract"];
-
     public async Task<MonitoringModuleContract> GetContractAsync(CancellationToken cancellationToken = default)
     {
-        if (options.Mode == MonitoringModuleOptions.InProcess)
-            return new MonitoringModuleContract("1.0", "monitoring", "1.0", "in-process",
-                InProcessCapabilities, DateTimeOffset.UtcNow, true, null);
-
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -40,10 +33,6 @@ public sealed class MonitoringModuleClient(
     public async Task<MonitoringCameraStatus> GetCameraStatusAsync(string cameraId,
         CancellationToken cancellationToken = default)
     {
-        if (options.StatusSource == MonitoringModuleOptions.LocalStatus)
-            return new MonitoringCameraStatus("1.0", "monitoring", cameraId, "local", null, 0, 0,
-                null, null, true, null);
-
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");

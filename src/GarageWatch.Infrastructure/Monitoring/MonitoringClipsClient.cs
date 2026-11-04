@@ -5,13 +5,11 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringClipsClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringClipsClient
+    IHttpClientFactory httpClientFactory) : IMonitoringClipsClient
 {
     public async Task<MonitoringClipPage?> ListAsync(MonitoringClipQuery query,
         CancellationToken cancellationToken = default)
     {
-        if (options.ClipsSource == MonitoringModuleOptions.LocalStatus) return null;
         var parameters = new List<string>
         {
             $"page={query.Page}", $"pageSize={query.PageSize}"
@@ -46,7 +44,6 @@ public sealed class MonitoringClipsClient(
     public async Task<MonitoringClipItem?> GetAsync(string publicId,
         CancellationToken cancellationToken = default)
     {
-        if (options.ClipsSource == MonitoringModuleOptions.LocalStatus) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -79,7 +76,6 @@ public sealed class MonitoringClipsClient(
     private async Task<HttpResponseMessage?> GetFileAsync(string path, string? range,
         CancellationToken cancellationToken)
     {
-        if (options.ClipsSource == MonitoringModuleOptions.LocalStatus) return null;
         try
         {
             var client = httpClientFactory.CreateClient("monitoring-module");

@@ -82,25 +82,16 @@ public static class DependencyInjection
         services.AddScoped<CameraClipTriggerConfigurationService>();
         services.AddScoped<KnownPersonService>();
         services.AddScoped<RemoteKnownPeopleGateway>();
-        services.AddScoped<IKnownPeopleGateway>(provider =>
-            provider.GetRequiredService<MonitoringModuleOptions>().RosterSource == MonitoringModuleOptions.Remote
-                ? provider.GetRequiredService<RemoteKnownPeopleGateway>()
-                : provider.GetRequiredService<KnownPersonService>());
+        services.AddScoped<IKnownPeopleGateway, RemoteKnownPeopleGateway>();
         services.AddScoped<FaceExtractorRegistryService>();
         services.AddScoped<BiometricEnrollmentService>();
         services.AddScoped<LocalBiometricEnrollmentGateway>();
         services.AddScoped<RemoteBiometricEnrollmentGateway>();
-        services.AddScoped<IBiometricEnrollmentGateway>(provider =>
-            provider.GetRequiredService<MonitoringModuleOptions>().BiometricsSource == MonitoringModuleOptions.Remote
-                ? provider.GetRequiredService<RemoteBiometricEnrollmentGateway>()
-                : provider.GetRequiredService<LocalBiometricEnrollmentGateway>());
+        services.AddScoped<IBiometricEnrollmentGateway, RemoteBiometricEnrollmentGateway>();
         services.AddScoped<ClipRetentionService>();
         services.AddScoped<LocalClipRetentionGateway>();
         services.AddScoped<RemoteClipRetentionGateway>();
-        services.AddScoped<IClipRetentionGateway>(provider =>
-            provider.GetRequiredService<MonitoringModuleOptions>().RetentionSource == MonitoringModuleOptions.Remote
-                ? provider.GetRequiredService<RemoteClipRetentionGateway>()
-                : provider.GetRequiredService<LocalClipRetentionGateway>());
+        services.AddScoped<IClipRetentionGateway, RemoteClipRetentionGateway>();
         services.AddSingleton<ClipReadLeaseRegistry>();
         services.AddScoped<ICameraCatalog, CameraCatalogService>();
         services.AddScoped<ICameraResourceAccess, CameraResourceAccessService>();
@@ -131,7 +122,7 @@ public static class DependencyInjection
         var portalOptions = PortalOptions.FromConfiguration(configuration);
         var monitoringOptions = MonitoringModuleOptions.FromConfiguration(configuration);
         var monitoringTokenOptions = MonitoringServiceTokenOptions.FromConfiguration(configuration);
-        if (monitoringOptions.UsesRemote && !monitoringTokenOptions.Configured)
+        if (!monitoringTokenOptions.Configured)
             throw new InvalidOperationException(
                 "MONITORING_SERVICE_TOKEN_SECRET deve ter ao menos 32 bytes quando qualquer fonte do Monitoramento é remote.");
         services.AddSingleton(monitoringTokenOptions);
@@ -142,16 +133,7 @@ public static class DependencyInjection
             provider.GetRequiredService<IConfiguration>()));
         services.AddHttpClient("monitoring-module", client =>
         {
-            if (monitoringOptions.Mode == MonitoringModuleOptions.Remote ||
-                monitoringOptions.ClipsSource == MonitoringModuleOptions.Remote ||
-                monitoringOptions.EventsSource == MonitoringModuleOptions.Remote ||
-                monitoringOptions.AnalysisSource == MonitoringModuleOptions.Remote ||
-                monitoringOptions.RosterSource == MonitoringModuleOptions.Remote ||
-                monitoringOptions.RetentionSource == MonitoringModuleOptions.Remote ||
-                monitoringOptions.BiometricsSource == MonitoringModuleOptions.Remote ||
-                monitoringOptions.LiveSource == MonitoringModuleOptions.Remote ||
-                monitoringOptions.ClipsWriteSource == MonitoringModuleOptions.Remote)
-                client.BaseAddress = new Uri(monitoringOptions.BaseUrl! + "/", UriKind.Absolute);
+            client.BaseAddress = new Uri(monitoringOptions.BaseUrl + "/", UriKind.Absolute);
             client.Timeout = TimeSpan.FromSeconds(3);
         }).AddHttpMessageHandler<MonitoringServiceTokenHandler>();
         services.AddScoped<IMonitoringModuleClient, MonitoringModuleClient>();

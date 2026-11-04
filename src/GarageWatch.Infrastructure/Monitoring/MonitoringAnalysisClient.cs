@@ -6,13 +6,11 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringAnalysisClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringAnalysisClient
+    IHttpClientFactory httpClientFactory) : IMonitoringAnalysisClient
 {
     public async Task<MonitoringAnalysisPolicy?> GetPolicyAsync(string cameraId,
         CancellationToken cancellationToken = default)
     {
-        if (options.AnalysisSource == MonitoringModuleOptions.LocalStatus) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -36,7 +34,6 @@ public sealed class MonitoringAnalysisClient(
     public async Task<MonitoringAnalysisPolicy?> UpdatePolicyAsync(string cameraId, string contextId,
         long expectedVersion, string policy, string actorId, CancellationToken cancellationToken = default)
     {
-        if (options.AnalysisSource == MonitoringModuleOptions.LocalStatus) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -64,7 +61,6 @@ public sealed class MonitoringAnalysisClient(
     public async Task<MonitoringAnalysisJob?> EnqueueAsync(MonitoringAnalysisEnqueue request,
         CancellationToken cancellationToken = default)
     {
-        if (options.AnalysisSource == MonitoringModuleOptions.LocalStatus) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -96,7 +92,6 @@ public sealed class MonitoringAnalysisClient(
 
     public async Task<MonitoringAnalysisJob?> ClaimAsync(CancellationToken cancellationToken = default)
     {
-        if (options.AnalysisSource == MonitoringModuleOptions.LocalStatus) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -120,7 +115,6 @@ public sealed class MonitoringAnalysisClient(
     public async Task<IReadOnlyList<MonitoringAnalysisJobStatus>?> LatestForClipsAsync(
         IReadOnlyCollection<string> clipPublicIds, CancellationToken cancellationToken = default)
     {
-        if (options.AnalysisSource == MonitoringModuleOptions.LocalStatus) return null;
         if (clipPublicIds.Count is 0 or > 100) return null;
         try
         {

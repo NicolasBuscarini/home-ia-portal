@@ -5,13 +5,11 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringRosterClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringRosterClient
+    IHttpClientFactory httpClientFactory) : IMonitoringRosterClient
 {
     public async Task<MonitoringRosterPage> ListAsync(int page, int pageSize,
         CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -35,7 +33,6 @@ public sealed class MonitoringRosterClient(
     public async Task<MonitoringRosterPerson> CreateAsync(MonitoringRosterCreateRequest request,
         CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -58,7 +55,6 @@ public sealed class MonitoringRosterClient(
 
     public async Task RemoveAsync(string publicId, CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -79,9 +75,4 @@ public sealed class MonitoringRosterClient(
         }
     }
 
-    private void EnsureRemote()
-    {
-        if (options.RosterSource != MonitoringModuleOptions.Remote)
-            throw new MonitoringRosterUnavailableException();
-    }
 }

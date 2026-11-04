@@ -143,9 +143,7 @@ public sealed class RemoteBiometricTests
     public async Task Client_maps_biometric_transport_failures_and_not_found()
     {
         var handler = new RecordingHandler();
-        var client = new MonitoringBiometricClient(new StubFactory(handler),
-            new MonitoringModuleOptions(MonitoringModuleOptions.Remote, "http://monitoring.invalid",
-                MonitoringModuleOptions.Remote, BiometricsSource: MonitoringModuleOptions.Remote));
+        var client = new MonitoringBiometricClient(new StubFactory(handler));
 
         handler.Response = new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -163,9 +161,7 @@ public sealed class RemoteBiometricTests
         await Assert.ThrowsAsync<MonitoringBiometricsRejectedException>(() =>
             client.EnrollAsync(RequestFor("USR000000000001")));
 
-        var failing = new MonitoringBiometricClient(new StubFactory(new FailingHandler()),
-            new MonitoringModuleOptions(MonitoringModuleOptions.Remote, "http://monitoring.invalid",
-                MonitoringModuleOptions.Remote, BiometricsSource: MonitoringModuleOptions.Remote));
+        var failing = new MonitoringBiometricClient(new StubFactory(new FailingHandler()));
         await Assert.ThrowsAsync<MonitoringBiometricsUnavailableException>(() =>
             failing.ListAsync("USR000000000001"));
     }

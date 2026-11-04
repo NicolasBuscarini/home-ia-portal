@@ -17,10 +17,6 @@ public sealed class MonitoringCaptureApiTests
         await using var factory = new ApiFactory(monitoringMode: "remote",
             monitoringStatusSource: "remote", monitoringCaptureClient: client);
         using var admin = await LoginAsync(factory);
-        using (var scope = factory.Services.CreateScope())
-            Assert.Equal("remote", scope.ServiceProvider
-                .GetRequiredService<GarageWatch.Infrastructure.Monitoring.MonitoringModuleOptions>().Mode);
-
         using var read = await admin.GetAsync("/api/v1/admin/monitoring/capture");
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
         using var readJson = JsonDocument.Parse(await read.Content.ReadAsStringAsync());

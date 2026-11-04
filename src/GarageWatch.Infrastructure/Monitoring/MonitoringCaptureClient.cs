@@ -4,19 +4,14 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringCaptureClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringCaptureClient
+    IHttpClientFactory httpClientFactory) : IMonitoringCaptureClient
 {
     public Task<MonitoringCaptureSnapshot?> GetCaptureAsync(CancellationToken cancellationToken = default) =>
-        options.Mode == MonitoringModuleOptions.Remote
-            ? GetAsync("api/v1/monitoring/capture", cancellationToken)
-            : Task.FromResult<MonitoringCaptureSnapshot?>(null);
+        GetAsync("api/v1/monitoring/capture", cancellationToken);
 
     public Task<MonitoringCaptureSettings?> UpdateCaptureAsync(MonitoringCaptureSettings settings,
         CancellationToken cancellationToken = default) =>
-        options.Mode == MonitoringModuleOptions.Remote
-            ? PutAsync("api/v1/monitoring/capture/settings", settings, cancellationToken)
-            : Task.FromResult<MonitoringCaptureSettings?>(null);
+        PutAsync("api/v1/monitoring/capture/settings", settings, cancellationToken);
 
     private async Task<MonitoringCaptureSnapshot?> GetAsync(string path, CancellationToken cancellationToken)
     {

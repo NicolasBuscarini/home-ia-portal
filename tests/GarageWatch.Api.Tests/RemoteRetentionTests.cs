@@ -124,9 +124,7 @@ public sealed class RemoteRetentionTests
     public async Task Client_maps_retention_paths_conflicts_and_not_found()
     {
         var handler = new RecordingHandler();
-        var client = new MonitoringRetentionClient(new StubFactory(handler),
-            new MonitoringModuleOptions(MonitoringModuleOptions.Remote, "http://monitoring.invalid",
-                MonitoringModuleOptions.Remote, RetentionSource: MonitoringModuleOptions.Remote));
+        var client = new MonitoringRetentionClient(new StubFactory(handler));
 
         handler.Response = new HttpResponseMessage(HttpStatusCode.OK)
         {

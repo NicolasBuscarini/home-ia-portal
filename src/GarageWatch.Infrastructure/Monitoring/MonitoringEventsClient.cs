@@ -5,13 +5,11 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringEventsClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringEventsClient
+    IHttpClientFactory httpClientFactory) : IMonitoringEventsClient
 {
     public async Task<MonitoringEventAppendOutcome?> AppendAsync(MonitoringEventEnvelope envelope,
         CancellationToken cancellationToken = default)
     {
-        if (options.EventsSource == MonitoringModuleOptions.LocalStatus) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -40,7 +38,6 @@ public sealed class MonitoringEventsClient(
 
     public async Task<MonitoringEventRecovery?> GetRecoveryAsync(CancellationToken cancellationToken = default)
     {
-        if (options.EventsSource == MonitoringModuleOptions.LocalStatus) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");

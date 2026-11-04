@@ -19,7 +19,7 @@ public sealed class MonitoringLiveAndClipMediaClientTests
                 Content = new StringContent("#EXTM3U\nsegments/abc\n", Encoding.UTF8, "application/vnd.apple.mpegurl")
             }
             : SegmentResponse());
-        var client = new MonitoringLiveClient(new StubFactory(handler), Options(live: "remote"));
+        var client = new MonitoringLiveClient(new StubFactory(handler));
 
         var playlist = await client.GetPlaylistAsync("garage-01");
         Assert.NotNull(playlist);
@@ -36,17 +36,9 @@ public sealed class MonitoringLiveAndClipMediaClientTests
     }
 
     [Fact]
-    public async Task Local_live_source_never_calls_the_service()
-    {
-        var client = new MonitoringLiveClient(new StubFactory(new NeverCalledHandler()), Options());
-        Assert.Null(await client.GetPlaylistAsync("garage-01"));
-        Assert.Null(await client.GetSegmentAsync("garage-01", "abc", null));
-    }
-
-    [Fact]
     public async Task Unreachable_live_service_is_reported_as_unavailable()
     {
-        var client = new MonitoringLiveClient(new StubFactory(new FailingHandler()), Options(live: "remote"));
+        var client = new MonitoringLiveClient(new StubFactory(new FailingHandler()));
         Assert.Null(await client.GetPlaylistAsync("garage-01"));
     }
 
@@ -59,7 +51,7 @@ public sealed class MonitoringLiveAndClipMediaClientTests
                 """{"mediaFileName":"abc.ts","mediaSha256":"aa","thumbnailFileName":"abc.jpg","thumbnailSha256":"bb"}""",
                 Encoding.UTF8, "application/json")
         });
-        var client = new MonitoringClipMediaClient(new StubFactory(handler), Options(clipsWrite: "remote"));
+        var client = new MonitoringClipMediaClient(new StubFactory(handler));
         var result = await client.AssembleAsync(new MonitoringClipMediaRequest("abc", "garage-01",
             ["one", "two"], DateTimeOffset.UtcNow.AddSeconds(-10), DateTimeOffset.UtcNow));
 
@@ -83,33 +75,24 @@ public sealed class MonitoringLiveAndClipMediaClientTests
         Assert.Equal("monitoring_clip_media_unavailable", error.Message);
     }
 
-    [Theory]
-    [InlineData("MONITORING_LIVE_SOURCE", "invalid")]
-    [InlineData("MONITORING_CLIPS_WRITE_SOURCE", "invalid")]
-    public void New_sources_are_validated(string key, string value)
-    {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            [key] = value
-        }).Build();
-        var error = Assert.Throws<InvalidOperationException>(() =>
-            MonitoringModuleOptions.FromConfiguration(configuration));
-        Assert.Contains(key, error.Message);
-    }
-
     [Fact]
-    public void Remote_live_source_requires_an_internal_base_url()
+    public void Base_url_is_required_and_validated()
     {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["MONITORING_LIVE_SOURCE"] = "remote"
-        }).Build();
-        Assert.Throws<InvalidOperationException>(() => MonitoringModuleOptions.FromConfiguration(configuration));
-    }
+        var missing = new ConfigurationBuilder().Build();
+        Assert.Throws<InvalidOperationException>(() => MonitoringModuleOptions.FromConfiguration(missing));
 
-    private static MonitoringModuleOptions Options(string live = "local", string clipsWrite = "local") =>
-        new(MonitoringModuleOptions.InProcess, live == "remote" ? "http://monitoring" : null,
-            MonitoringModuleOptions.LocalStatus, LiveSource: live, ClipsWriteSource: clipsWrite);
+        var invalid = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["MONITORING_BASE_URL"] = "file:///tmp/monitoring"
+        }).Build();
+        Assert.Throws<InvalidOperationException>(() => MonitoringModuleOptions.FromConfiguration(invalid));
+
+        var valid = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["MONITORING_BASE_URL"] = "http://monitoring:8080/"
+        }).Build();
+        Assert.Equal("http://monitoring:8080", MonitoringModuleOptions.FromConfiguration(valid).BaseUrl);
+    }
 
     private static HttpResponseMessage SegmentResponse()
     {

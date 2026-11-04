@@ -77,9 +77,7 @@ public sealed class RemoteRosterTests
     public async Task Client_maps_roster_transport_success_and_not_found()
     {
         var handler = new RecordingHandler();
-        var client = new MonitoringRosterClient(new StubFactory(handler),
-            new MonitoringModuleOptions(MonitoringModuleOptions.Remote, "http://monitoring.invalid",
-                MonitoringModuleOptions.Remote, RosterSource: MonitoringModuleOptions.Remote));
+        var client = new MonitoringRosterClient(new StubFactory(handler));
 
         handler.Response = new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -96,9 +94,7 @@ public sealed class RemoteRosterTests
     [Fact]
     public async Task Client_surfaces_transport_failures_instead_of_returning_empty_data()
     {
-        var client = new MonitoringRosterClient(new StubFactory(new FailingHandler()),
-            new MonitoringModuleOptions(MonitoringModuleOptions.Remote, "http://monitoring.invalid",
-                MonitoringModuleOptions.Remote, RosterSource: MonitoringModuleOptions.Remote));
+        var client = new MonitoringRosterClient(new StubFactory(new FailingHandler()));
         await Assert.ThrowsAsync<MonitoringRosterUnavailableException>(() => client.ListAsync(1, 25));
     }
 

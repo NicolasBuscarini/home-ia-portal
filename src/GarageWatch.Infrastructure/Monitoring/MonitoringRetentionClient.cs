@@ -6,13 +6,11 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringRetentionClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringRetentionClient
+    IHttpClientFactory httpClientFactory) : IMonitoringRetentionClient
 {
     public async Task<MonitoringRetentionPolicy?> GetPolicyAsync(string cameraId,
         CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -36,7 +34,6 @@ public sealed class MonitoringRetentionClient(
     public async Task<MonitoringRetentionPolicy> UpdatePolicyAsync(string cameraId, long expectedVersion,
         int retentionDays, int? maximumStorageGigabytes, CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -60,7 +57,6 @@ public sealed class MonitoringRetentionClient(
     public async Task<MonitoringPreservation> SetPreservationAsync(string clipPublicId, long expectedVersion,
         bool isPreserved, CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -84,7 +80,6 @@ public sealed class MonitoringRetentionClient(
     public async Task<IReadOnlyList<MonitoringPreservation>> ListPreservationsAsync(
         IReadOnlyCollection<string> clipPublicIds, CancellationToken cancellationToken = default)
     {
-        EnsureRemote();
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -127,9 +122,4 @@ public sealed class MonitoringRetentionClient(
         throw new MonitoringRetentionUnavailableException();
     }
 
-    private void EnsureRemote()
-    {
-        if (options.RetentionSource != MonitoringModuleOptions.Remote)
-            throw new MonitoringRetentionUnavailableException();
-    }
 }

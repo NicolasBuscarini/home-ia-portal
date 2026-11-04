@@ -3,12 +3,10 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringLiveClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringLiveClient
+    IHttpClientFactory httpClientFactory) : IMonitoringLiveClient
 {
     public async Task<string?> GetPlaylistAsync(string cameraId, CancellationToken cancellationToken = default)
     {
-        if (options.LiveSource != MonitoringModuleOptions.Remote) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
@@ -26,7 +24,6 @@ public sealed class MonitoringLiveClient(
     public async Task<MonitoringLiveSegment?> GetSegmentAsync(string cameraId, string segmentId, string? range,
         CancellationToken cancellationToken = default)
     {
-        if (options.LiveSource != MonitoringModuleOptions.Remote) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");

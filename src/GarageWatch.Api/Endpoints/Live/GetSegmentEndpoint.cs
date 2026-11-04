@@ -16,8 +16,8 @@ public sealed class GetSegmentEndpoint() : BaseEndpoint("Live video", "GetLiveSe
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/live/{cameraId}/segments/{segmentId}", async (string cameraId, string segmentId,
             ClaimsPrincipal principal, UserManager<ApplicationUser> users, ICameraResourceAccess cameraAccess,
-            IamDbContext database, CaptureOptions captureOptions, MonitoringModuleOptions monitoringOptions,
-            IMonitoringLiveClient liveClient, HttpContext httpContext, LocalSegmentSpool spool,
+            IamDbContext database, CaptureOptions captureOptions,
+            IMonitoringLiveClient liveClient, HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);
@@ -27,22 +27,15 @@ public sealed class GetSegmentEndpoint() : BaseEndpoint("Live video", "GetLiveSe
                 .Select(item => item.CameraId).SingleOrDefaultAsync(cancellationToken);
             if (!string.Equals(internalCameraId, captureOptions.CameraId, StringComparison.Ordinal) ||
                 !LocalSegmentSpool.IsSafeSegmentId(segmentId)) return Results.NotFound();
-            if (monitoringOptions.LiveSource == MonitoringModuleOptions.Remote)
-            {
-                var remote = await liveClient.GetSegmentAsync(internalCameraId!, segmentId,
-                    httpContext.Request.Headers.Range.ToString(), cancellationToken);
-                if (remote is null) return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-                httpContext.Response.StatusCode = remote.StatusCode;
-                httpContext.Response.ContentType = remote.ContentType;
-                if (!string.IsNullOrEmpty(remote.ContentRange))
-                    httpContext.Response.Headers.ContentRange = remote.ContentRange;
-                await httpContext.Response.Body.WriteAsync(remote.Content, cancellationToken);
-                return Results.Empty;
-            }
-            var item = spool.GetRecentSegments(captureOptions.MaximumSegments)
-                .FirstOrDefault(x => x.Manifest.SegmentId == segmentId);
-            return item.Manifest is null ? Results.NotFound()
-                : Results.File(item.Path, "video/mp2t", enableRangeProcessing: true);
+            var remote = await liveClient.GetSegmentAsync(internalCameraId!, segmentId,
+                httpContext.Request.Headers.Range.ToString(), cancellationToken);
+            if (remote is null) return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            httpContext.Response.StatusCode = remote.StatusCode;
+            httpContext.Response.ContentType = remote.ContentType;
+            if (!string.IsNullOrEmpty(remote.ContentRange))
+                httpContext.Response.Headers.ContentRange = remote.ContentRange;
+            await httpContext.Response.Body.WriteAsync(remote.Content, cancellationToken);
+            return Results.Empty;
         }).RequireAuthorization("Viewer")
             .Produces<byte[]>(StatusCodes.Status200OK, "video/mp2t")
             .Produces<byte[]>(StatusCodes.Status206PartialContent, "video/mp2t")

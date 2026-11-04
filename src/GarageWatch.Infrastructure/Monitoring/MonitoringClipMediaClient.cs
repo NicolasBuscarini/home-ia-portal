@@ -4,13 +4,11 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringClipMediaClient(
-    IHttpClientFactory httpClientFactory,
-    MonitoringModuleOptions options) : IMonitoringClipMediaClient
+    IHttpClientFactory httpClientFactory) : IMonitoringClipMediaClient
 {
     public async Task<MonitoringClipMediaResult?> AssembleAsync(MonitoringClipMediaRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (options.ClipsWriteSource != MonitoringModuleOptions.Remote) return null;
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
