@@ -43,10 +43,12 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
             new PermissionRequest("clips.analysis.request", scope.ContextId, scope.CameraId), cancellationToken);
         var canManage = await profiles.IsAllowedAsync(actorId,
             new PermissionRequest("clips.analysis.policy.manage", scope.ContextId, scope.CameraId), cancellationToken);
-        var remote = await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken) ??
-            throw new MonitoringAnalysisUnavailableException();
-        return new(scope.CameraPublicId, scope.ContextPublicId, remote.Policy, remote.Version,
-            remote.UpdatedAtUtc, canRequest, canManage);
+        var remote = await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken);
+        return remote is null
+            ? new(scope.CameraPublicId, scope.ContextPublicId, ClipAnalysisPolicies.ManualOnly, 0,
+                DateTimeOffset.UnixEpoch, canRequest, canManage)
+            : new(scope.CameraPublicId, scope.ContextPublicId, remote.Policy, remote.Version,
+                remote.UpdatedAtUtc, canRequest, canManage);
     }
 
     public async Task<ClipAnalysisPolicyResult> UpdatePolicyAsync(Guid actorId, string cameraId, long expectedVersion,

@@ -183,6 +183,8 @@ public static class DependencyInjection
         services.AddSingleton<IClipAnalysisAutoDispatcher, ClipAnalysisAutoDispatcher>();
         services.AddSingleton<ClipTriggerWorker>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ClipTriggerWorker>());
+        services.AddSingleton<SpoolWatcherWorker>();
+        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<SpoolWatcherWorker>());
         return services;
     }
 }

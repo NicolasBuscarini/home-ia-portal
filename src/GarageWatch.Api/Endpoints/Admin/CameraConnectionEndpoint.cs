@@ -21,8 +21,6 @@ public sealed class GetCameraConnectionEndpoint() : BaseEndpoint("Camera adminis
         {
             if (!PublicIdFormat.IsValid(cameraId, PublicIdPrefixes.CameraPrefix))
                 return Results.BadRequest(new ApiErrorResponse("invalid_camera_id"));
-            if (capture.Profile != "ffmpeg-rtsp")
-                return Results.Conflict(new ApiErrorResponse("camera_capture_not_active"));
             var camera = await database.CameraCatalog.AsNoTracking()
                 .Include(item => item.Context)
                 .SingleOrDefaultAsync(item => item.PublicId == cameraId && item.CameraId == capture.CameraId
@@ -57,8 +55,6 @@ public sealed class UpdateCameraConnectionEndpoint() : BaseEndpoint("Camera admi
                 return Results.BadRequest(new ApiErrorResponse("invalid_camera_id"));
             if (!ValidHost(request.Address) || !ValidHost(request.ExpectedAddress))
                 return Results.BadRequest(new ApiErrorResponse("invalid_camera_address"));
-            if (capture.Profile != "ffmpeg-rtsp")
-                return Results.Conflict(new ApiErrorResponse("camera_capture_not_active"));
             var actor = await users.GetUserAsync(principal);
             if (actor is null) return Results.Unauthorized();
             var camera = await database.CameraCatalog.AsNoTracking()

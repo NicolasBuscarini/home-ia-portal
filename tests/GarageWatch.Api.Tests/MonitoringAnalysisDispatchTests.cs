@@ -14,6 +14,22 @@ namespace GarageWatch.Api.Tests;
 public sealed class MonitoringAnalysisDispatchTests
 {
     [Fact]
+    public async Task Remote_policy_absent_defaults_to_manual_only_at_version_zero()
+    {
+        var remote = new FakeAnalysisClient { Policy = null };
+        await using var factory = new ApiFactory(monitoringAnalysisClient: remote);
+        var cameraPublicId = await GetCameraPublicIdAsync(factory);
+        using var admin = await LoginAsync(factory);
+
+        using var read = await admin.GetAsync(
+            $"/api/v1/cameras/{cameraPublicId}/clip-analysis-dispatch-policy");
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        var body = await read.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("manual_only", body.GetProperty("policy").GetString());
+        Assert.Equal(0, body.GetProperty("version").GetInt64());
+    }
+
+    [Fact]
     public async Task Remote_policy_source_proxies_versioned_policy_and_keeps_portal_authorization()
     {
         var remote = new FakeAnalysisClient
