@@ -87,6 +87,9 @@ public static class DependencyInjection
         services.AddScoped<BiometricEnrollmentService>();
         services.AddScoped<IBiometricPersonLinkStore, BiometricPersonLinkStore>();
         services.AddScoped<BiometricPersonLinkService>();
+        services.AddSingleton<IIdentityMatcher, CosineIdentityMatcher>();
+        services.AddScoped<IIdentityEmbeddingSource, LocalIdentityEmbeddingSource>();
+        services.AddScoped<IdentityMatchService>();
         services.AddScoped<LocalBiometricEnrollmentGateway>();
         services.AddScoped<RemoteBiometricEnrollmentGateway>();
         services.AddScoped<IBiometricEnrollmentGateway, RemoteBiometricEnrollmentGateway>();

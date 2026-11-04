@@ -63,4 +63,19 @@ public sealed class AesGcmBiometricDataProtector : IBiometricDataProtector
         aes.Encrypt(nonce, embeddingFloats, ciphertext, tag);
         return new(ciphertext, nonce, tag, ActiveKeyVersion);
     }
+
+    public byte[] Unprotect(ProtectedBiometricEmbedding embedding)
+    {
+        ArgumentNullException.ThrowIfNull(embedding);
+        if (_key is null || ActiveKeyVersion is null)
+            throw new InvalidOperationException("biometric_protection_not_configured");
+        if (!string.Equals(embedding.KeyVersion, ActiveKeyVersion, StringComparison.Ordinal))
+            throw new CryptographicException("biometric_key_version_unavailable");
+        if (embedding.Nonce.Length != NonceBytes || embedding.Tag.Length != TagBytes)
+            throw new CryptographicException("biometric_payload_invalid");
+        var plaintext = new byte[embedding.Ciphertext.Length];
+        using var aes = new AesGcm(_key, TagBytes);
+        aes.Decrypt(embedding.Nonce, embedding.Ciphertext, embedding.Tag, plaintext);
+        return plaintext;
+    }
 }

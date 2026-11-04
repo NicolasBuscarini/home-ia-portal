@@ -23,6 +23,9 @@ public interface IBiometricDataProtector
     bool IsConfigured { get; }
     string? ActiveKeyVersion { get; }
     ProtectedBiometricEmbedding Protect(ReadOnlySpan<byte> embeddingFloats);
+
+    /// <summary>Decrypts in memory only; unknown key versions and corrupt payloads must fail closed.</summary>
+    byte[] Unprotect(ProtectedBiometricEmbedding embedding);
 }
 
 /// <summary>Extraction rejected the submitted image for a reason the caller can fix.</summary>
