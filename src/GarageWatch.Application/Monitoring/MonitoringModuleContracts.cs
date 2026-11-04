@@ -71,7 +71,7 @@ public interface IMonitoringClipsClient
 
 public sealed record MonitoringClipQuery(IReadOnlyList<string> CameraIds, string? PublicId,
     DateTimeOffset? FromUtc, DateTimeOffset? ToUtc, string? State, int? MinDurationSeconds,
-    int? MaxDurationSeconds, string? Analysis, int Page, int PageSize);
+    int? MaxDurationSeconds, string? Analysis, bool? Preserved, string? Sort, int Page, int PageSize);
 
 public sealed record MonitoringClipItem(string PublicId, string ClipId, string CameraId,
     DateTimeOffset StartedAtUtc, DateTimeOffset EndedAtUtc, string State, string ArchiveStatus,

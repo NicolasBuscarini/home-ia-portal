@@ -29,8 +29,8 @@ public sealed class ClipLibraryService(IamDbContext database, AccessProfileServi
 
     public async Task<ClipPage> ListAsync(Guid userId, bool isAdministrator, string? cameraId,
         string? publicId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, string? state,
-        int? minDurationSeconds, int? maxDurationSeconds, string? analysis, int page, int pageSize,
-        CancellationToken cancellationToken)
+        int? minDurationSeconds, int? maxDurationSeconds, string? analysis, bool? preserved, string? sort,
+        int page, int pageSize, CancellationToken cancellationToken)
     {
         if (page is < 1 or > 100_000 || pageSize is < 1 or > 100 ||
             (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc) ||
@@ -40,6 +40,8 @@ public sealed class ClipLibraryService(IamDbContext database, AccessProfileServi
             (minDurationSeconds.HasValue && maxDurationSeconds.HasValue &&
                 minDurationSeconds > maxDurationSeconds) ||
             (analysis is not null && analysis is not ("performed" or "not_performed")) ||
+            (sort is not null && sort is not ("newest" or "oldest" or "longest" or "shortest" or
+                "largest" or "smallest")) ||
             (state is not null && state is not ("collecting" or "ready" or "failed" or "lost_capacity")))
             throw new ArgumentException("invalid_clip_query");
 
@@ -48,7 +50,7 @@ public sealed class ClipLibraryService(IamDbContext database, AccessProfileServi
 
         var accessible = allowedCameras.Select(camera => camera.CameraId).ToHashSet(StringComparer.Ordinal);
         var remote = await RemoteClipsClient.ListAsync(new MonitoringClipQuery(accessible.ToArray(), publicId,
-            fromUtc, toUtc, state, minDurationSeconds, maxDurationSeconds, analysis, page, pageSize),
+            fromUtc, toUtc, state, minDurationSeconds, maxDurationSeconds, analysis, preserved, sort, page, pageSize),
             cancellationToken);
         if (remote is null) throw new InvalidOperationException("monitoring_clips_unavailable");
         var preservation = await PreservationStatesAsync(remote.Items.Select(item => item.PublicId).ToArray(),

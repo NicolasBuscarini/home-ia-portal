@@ -43,10 +43,12 @@ public sealed class ClipLibraryRemoteApiTests
 
         using var filtered = await admin.GetAsync(
             $"/api/v1/clips?publicId={publicId}&minDurationSeconds=1&maxDurationSeconds=3600" +
-            "&analysis=performed&page=1&pageSize=25");
+            "&analysis=performed&preserved=true&sort=longest&page=1&pageSize=25");
         Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
         Assert.Equal(publicId, fake.LastQuery.PublicId);
         Assert.Equal(1, fake.LastQuery.MinDurationSeconds);
+        Assert.True(fake.LastQuery.Preserved);
+        Assert.Equal("longest", fake.LastQuery.Sort);
         Assert.Equal(3600, fake.LastQuery.MaxDurationSeconds);
         Assert.Equal("performed", fake.LastQuery.Analysis);
 

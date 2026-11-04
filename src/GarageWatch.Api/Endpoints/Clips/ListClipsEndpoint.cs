@@ -12,7 +12,7 @@ public sealed class ListClipsEndpoint() : BaseEndpoint("Clips", "ListClips", "Li
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/clips", async (string? cameraId, string? publicId, DateTimeOffset? fromUtc,
             DateTimeOffset? toUtc, string? state, int? minDurationSeconds, int? maxDurationSeconds,
-            string? analysis, int? page, int? pageSize, ClaimsPrincipal principal,
+            string? analysis, bool? preserved, string? sort, int? page, int? pageSize, ClaimsPrincipal principal,
             UserManager<ApplicationUser> users, ClipLibraryService library, CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);
@@ -21,8 +21,8 @@ public sealed class ListClipsEndpoint() : BaseEndpoint("Clips", "ListClips", "Li
             try
             {
                 var result = await library.ListAsync(user.Id, admin, cameraId, publicId, fromUtc, toUtc,
-                    state, minDurationSeconds, maxDurationSeconds, analysis, page ?? 1, pageSize ?? 25,
-                    cancellationToken);
+                    state, minDurationSeconds, maxDurationSeconds, analysis, preserved, sort, page ?? 1,
+                    pageSize ?? 25, cancellationToken);
                 var items = result.Items.Select(item => new ClipListItemResponse(item.PublicId, item.CameraId,
                     item.StartedAtUtc, item.EndedAtUtc, item.State, item.ArchiveStatus, item.AnalysisStatus,
                     item.ThumbnailUrl, item.SizeBytes, item.TriggerReason, item.TriggerConfigVersion,

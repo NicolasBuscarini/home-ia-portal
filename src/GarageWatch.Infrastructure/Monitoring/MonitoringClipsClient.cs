@@ -24,6 +24,10 @@ public sealed class MonitoringClipsClient(
             parameters.Add($"maxDurationSeconds={query.MaxDurationSeconds.Value}");
         if (query.Analysis is not null)
             parameters.Add($"analysis={Uri.EscapeDataString(query.Analysis)}");
+        if (query.Preserved.HasValue)
+            parameters.Add($"preserved={(query.Preserved.Value ? "true" : "false")}");
+        if (query.Sort is not null)
+            parameters.Add($"sort={Uri.EscapeDataString(query.Sort)}");
         if (query.FromUtc.HasValue)
             parameters.Add($"fromUtc={Uri.EscapeDataString(query.FromUtc.Value.ToString("O"))}");
         if (query.ToUtc.HasValue)
