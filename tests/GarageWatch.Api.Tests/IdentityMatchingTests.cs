@@ -1,13 +1,16 @@
 using System.Security.Cryptography;
 using GarageWatch.Application.Biometrics;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Biometrics;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -166,26 +169,92 @@ public sealed class IdentityMatchingTests
     }
 
     [Fact]
-    public async Task Remote_biometric_topology_fails_closed_without_a_ciphertext_read_contract()
+    public async Task Remote_source_decrypts_service_ciphertext_and_filters_by_active_link()
     {
-        await using var factory = CreateFactory("remote");
+        var remote = new FakeCiphertextClient();
+        await using var factory = CreateFactory("remote", remote);
         using var client = factory.CreateClient();
-        using var scope = factory.Services.CreateScope();
-        await Assert.ThrowsAsync<IdentityMatchingUnavailableException>(() =>
-            scope.ServiceProvider.GetRequiredService<IdentityMatchService>()
-                .MatchAsync(Observation([0.1f, 0.2f, 0.3f])));
+        await SeedLinkAsync(factory, "PER000000000201", "BIO000000000201");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var protector = scope.ServiceProvider.GetRequiredService<IBiometricDataProtector>();
+            var protectedData = protector.Protect(BiometricEmbeddingCodec.Serialize([0.1f, 0.2f, 0.3f]));
+            remote.Items.Add(new MonitoringBiometricCiphertext("BIO000000000201",
+                protectedData.Ciphertext, protectedData.Nonce, protectedData.Tag, "test-1", 3,
+                ModelId, ModelVersion, FaceObservationV1.CurrentEmbeddingSchemaVersion,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(365)));
+        }
+
+        using var matchScope = factory.Services.CreateScope();
+        var result = await matchScope.ServiceProvider.GetRequiredService<IdentityMatchService>()
+            .MatchAsync(Observation([0.1f, 0.2f, 0.3f]));
+
+        Assert.Equal(IdentityMatchStatus.Suggested, result.Status);
+        Assert.Equal("PER000000000201", result.Best?.PersonPublicId);
+        Assert.Equal(1, result.EvaluatedEnrollments);
     }
 
-    private static WebApplicationFactory<Program> CreateFactory(string monitoringBiometricsSource = "local") =>
-        new ApiFactory(monitoringBiometricsSource: monitoringBiometricsSource).WithWebHostBuilder(builder =>
+    [Fact]
+    public async Task Remote_source_fails_closed_when_the_service_is_unavailable()
+    {
+        var remote = new FakeCiphertextClient { Unavailable = true };
+        await using var factory = CreateFactory("remote", remote);
+        using var client = factory.CreateClient();
+        using var scope = factory.Services.CreateScope();
+        var exception = await Assert.ThrowsAsync<IdentityMatchingUnavailableException>(() =>
+            scope.ServiceProvider.GetRequiredService<IdentityMatchService>()
+                .MatchAsync(Observation([0.1f, 0.2f, 0.3f])));
+        Assert.Equal("biometrics_store_unavailable", exception.Code);
+    }
+
+    private static WebApplicationFactory<Program> CreateFactory(string monitoringBiometricsSource = "local",
+        IMonitoringBiometricCiphertextClient? ciphertextClient = null) =>
+        new ApiFactory(monitoringBiometricsSource: monitoringBiometricsSource,
+                monitoringBiometricClient: ciphertextClient is null ? null : new FakeBiometricClient())
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureAppConfiguration((_, configuration) =>
+                    configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        [AesGcmBiometricDataProtector.KeySetting] = TestKey,
+                        [AesGcmBiometricDataProtector.KeyVersionSetting] = "test-1"
+                    }));
+                if (ciphertextClient is not null)
+                    builder.ConfigureTestServices(services =>
+                    {
+                        services.RemoveAll<IMonitoringBiometricCiphertextClient>();
+                        services.AddSingleton(ciphertextClient);
+                    });
+            });
+
+    private static async Task SeedLinkAsync(WebApplicationFactory<Program> factory, string personPublicId,
+        string enrollmentPublicId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await users.FindByNameAsync("contract-user") ?? throw new InvalidOperationException("admin");
+        var now = DateTimeOffset.UtcNow;
+        database.KnownPeople.Add(new KnownPerson
         {
-            builder.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    [AesGcmBiometricDataProtector.KeySetting] = TestKey,
-                    [AesGcmBiometricDataProtector.KeyVersionSetting] = "test-1"
-                }));
+            Id = Guid.NewGuid(),
+            PublicId = personPublicId,
+            DisplayName = "Pessoa autorizada",
+            Purpose = "Teste de matching remoto",
+            AuthorizationRecordedAtUtc = now,
+            CreatedAtUtc = now,
+            Version = 1
         });
+        database.BiometricPersonLinks.Add(new BiometricPersonLink
+        {
+            Id = Guid.NewGuid(),
+            EnrollmentPublicId = enrollmentPublicId,
+            KnownPersonPublicId = personPublicId,
+            LinkedByUserId = user.Id,
+            LinkedAtUtc = now
+        });
+        await database.SaveChangesAsync();
+    }
 
     private static async Task SeedAsync(WebApplicationFactory<Program> factory, string personPublicId,
         string enrollmentPublicId, float[] values, string keyVersion = "test-1")
@@ -247,6 +316,18 @@ public sealed class IdentityMatchingTests
             LinkedAtUtc = now
         });
         await database.SaveChangesAsync();
+    }
+
+    private sealed class FakeCiphertextClient : IMonitoringBiometricCiphertextClient
+    {
+        public List<MonitoringBiometricCiphertext> Items { get; } = [];
+        public bool Unavailable { get; set; }
+
+        public Task<IReadOnlyList<MonitoringBiometricCiphertext>> ListActiveAsync(
+            CancellationToken cancellationToken = default) =>
+            Unavailable
+                ? throw new MonitoringBiometricsUnavailableException()
+                : Task.FromResult<IReadOnlyList<MonitoringBiometricCiphertext>>(Items.ToArray());
     }
 
     private static FaceObservationV1 Observation(float[] values) => new(

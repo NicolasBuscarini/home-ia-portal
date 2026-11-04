@@ -6,7 +6,7 @@ using GarageWatch.Application.Monitoring;
 namespace GarageWatch.Infrastructure.Monitoring;
 
 public sealed class MonitoringBiometricClient(
-    IHttpClientFactory httpClientFactory) : IMonitoringBiometricClient
+    IHttpClientFactory httpClientFactory) : IMonitoringBiometricClient, IMonitoringBiometricCiphertextClient
 {
     public async Task<IReadOnlyList<MonitoringBiometricEnrollment>> ListAsync(string userPublicId,
         CancellationToken cancellationToken = default)
@@ -75,6 +75,30 @@ public sealed class MonitoringBiometricClient(
                        ?? throw new MonitoringBiometricsUnavailableException();
             if (response.StatusCode == HttpStatusCode.BadRequest)
                 throw new MonitoringBiometricsRejectedException("invalid_biometric_enrollment");
+            throw new MonitoringBiometricsUnavailableException();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or JsonException)
+        {
+            throw new MonitoringBiometricsUnavailableException();
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new MonitoringBiometricsUnavailableException();
+        }
+    }
+
+    public async Task<IReadOnlyList<MonitoringBiometricCiphertext>> ListActiveAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var client = httpClientFactory.CreateClient("monitoring-module");
+            using var response = await client.GetAsync("api/v1/monitoring/biometrics/ciphertexts",
+                cancellationToken);
+            if (response.IsSuccessStatusCode)
+                return await response.Content
+                           .ReadFromJsonAsync<MonitoringBiometricCiphertext[]>(cancellationToken)
+                       ?? throw new MonitoringBiometricsUnavailableException();
             throw new MonitoringBiometricsUnavailableException();
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException)

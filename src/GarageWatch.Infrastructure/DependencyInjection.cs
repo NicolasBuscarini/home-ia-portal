@@ -88,7 +88,13 @@ public static class DependencyInjection
         services.AddScoped<IBiometricPersonLinkStore, BiometricPersonLinkStore>();
         services.AddScoped<BiometricPersonLinkService>();
         services.AddSingleton<IIdentityMatcher, CosineIdentityMatcher>();
-        services.AddScoped<IIdentityEmbeddingSource, LocalIdentityEmbeddingSource>();
+        services.AddScoped<LocalIdentityEmbeddingSource>();
+        services.AddScoped<RemoteIdentityEmbeddingSource>();
+        services.AddScoped<IIdentityEmbeddingSource>(provider =>
+            string.Equals(provider.GetRequiredService<IConfiguration>()["MONITORING_BIOMETRICS_SOURCE"],
+                "local", StringComparison.OrdinalIgnoreCase)
+                ? provider.GetRequiredService<LocalIdentityEmbeddingSource>()
+                : provider.GetRequiredService<RemoteIdentityEmbeddingSource>());
         services.AddScoped<IdentityMatchService>();
         services.AddScoped<LocalBiometricEnrollmentGateway>();
         services.AddScoped<RemoteBiometricEnrollmentGateway>();
@@ -150,7 +156,11 @@ public static class DependencyInjection
         services.AddScoped<IMonitoringClipsClient, MonitoringClipsClient>();
         services.AddScoped<IMonitoringRosterClient, MonitoringRosterClient>();
         services.AddScoped<IMonitoringRetentionClient, MonitoringRetentionClient>();
-        services.AddScoped<IMonitoringBiometricClient, MonitoringBiometricClient>();
+        services.AddScoped<MonitoringBiometricClient>();
+        services.AddScoped<IMonitoringBiometricClient>(provider =>
+            provider.GetRequiredService<MonitoringBiometricClient>());
+        services.AddScoped<IMonitoringBiometricCiphertextClient>(provider =>
+            provider.GetRequiredService<MonitoringBiometricClient>());
         services.AddScoped<IMonitoringAnalysisClient, MonitoringAnalysisClient>();
         services.AddScoped<IMonitoringLiveClient, MonitoringLiveClient>();
         // O assembler remoto de clipes é singleton; o cliente não mantém estado e só usa

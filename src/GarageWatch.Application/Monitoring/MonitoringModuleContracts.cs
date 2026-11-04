@@ -148,6 +148,13 @@ public sealed class MonitoringRetentionUnavailableException()
 
 public sealed class MonitoringRetentionRejectedException(string code) : Exception(code);
 
+public interface IMonitoringBiometricCiphertextClient
+{
+    /// <summary>Returns only active encrypted payloads; the service never receives the key or plaintext.</summary>
+    Task<IReadOnlyList<MonitoringBiometricCiphertext>> ListActiveAsync(
+        CancellationToken cancellationToken = default);
+}
+
 public interface IMonitoringBiometricClient
 {
     Task<IReadOnlyList<MonitoringBiometricEnrollment>> ListAsync(string userPublicId,
@@ -173,6 +180,11 @@ public sealed record MonitoringBiometricEnrollment(string PublicId, string UserP
     DateTimeOffset EnrolledAtUtc, DateTimeOffset ExpiresAtUtc, DateTimeOffset? RevokedAtUtc, string RevokedReason,
     string ModelId, string ModelVersion, int Dimensions, string KeyVersion, string ConsentVersion,
     DateTimeOffset ConsentAcceptedAtUtc);
+
+public sealed record MonitoringBiometricCiphertext(string PublicId, byte[] EmbeddingCiphertext,
+    byte[] EmbeddingNonce, byte[] EmbeddingTag, string KeyVersion, int Dimensions, string ModelId,
+    string ModelVersion, string EmbeddingSchemaVersion, DateTimeOffset EnrolledAtUtc,
+    DateTimeOffset ExpiresAtUtc);
 
 public sealed class MonitoringBiometricsUnavailableException()
     : Exception("monitoring_biometrics_unavailable");
