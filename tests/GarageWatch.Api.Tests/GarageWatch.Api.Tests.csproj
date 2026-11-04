@@ -22,5 +22,7 @@
     <None Include="../../contracts/detection-result.v1.schema.json" Link="contracts/detection-result.v1.schema.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../contracts/event-rules.v1.schema.json" Link="contracts/event-rules.v1.schema.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../contracts/archived-clip-manifest.v1.schema.json" Link="contracts/archived-clip-manifest.v1.schema.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../contracts/platform-event.v1.schema.json" Link="contracts/platform-event.v1.schema.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../contracts/platform-event.v1.example.json" Link="contracts/platform-event.v1.example.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

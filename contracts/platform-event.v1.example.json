@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.0",
+  "publicId": "EVT000000000123",
+  "eventId": "e0f0b6a2-7f6e-4f3a-9d4f-2a1b3c4d5e6f",
+  "eventType": "clip.preserved",
+  "category": "media",
+  "severity": "info",
+  "outcome": "success",
+  "occurredAtUtc": "2026-11-04T18:22:10.123Z",
+  "recordedAtUtc": "2026-11-04T18:22:10.160Z",
+  "source": "monitoring",
+  "sourceVersion": "1.0",
+  "emitter": "service",
+  "actor": {
+    "userPublicId": "USR000000000042",
+    "username": null,
+    "displayName": null
+  },
+  "subject": {
+    "type": "clip",
+    "publicId": "CLP000000000123"
+  },
+  "resource": {
+    "type": "clip",
+    "publicId": "CLP000000000123"
+  },
+  "correlationId": "c7f4b4a1-2f6e-4b0e-9a1d-5b8e2f0c3d11",
+  "causationId": "EVT000000000456",
+  "requestId": "0HN7G5A2B3C4D:00000001",
+  "sessionId": null,
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "spanId": "00f067aa0ba902b7",
+  "http": {
+    "method": "PUT",
+    "route": "/api/v1/clips/{clipId}/preservation",
+    "statusCode": 200,
+    "durationMs": 41
+  },
+  "client": {
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64)",
+    "browser": "Firefox",
+    "os": "Linux",
+    "device": "desktop",
+    "ip": "127.0.0.1"
+  },
+  "metadata": {
+    "isPreserved": true,
+    "policyVersion": 4
+  },
+  "payloadHash": "42187f8fabb6b4363e3c9d474dfc6abebe3b4d1d003a30f3565b0bc612d5d54f"
+}

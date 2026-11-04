@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://home-ia.local/contracts/platform-event.v1.schema.json",
+  "title": "platform-event.v1 (stored envelope)",
+  "description": "Canonical append-only audit event of the Home IA platform EventStore (ADR114). The HTTP ingestion payload (T17-C) carries the event fields only; publicId, recordedAtUtc and payloadHash are assigned by the server. Fields are never rewritten after append.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "eventType",
+    "category",
+    "severity",
+    "outcome",
+    "occurredAtUtc",
+    "source",
+    "sourceVersion",
+    "emitter",
+    "actor",
+    "subject",
+    "resource",
+    "correlationId",
+    "causationId",
+    "requestId",
+    "sessionId",
+    "traceId",
+    "spanId",
+    "http",
+    "client",
+    "metadata",
+    "publicId",
+    "recordedAtUtc",
+    "payloadHash"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "publicId": {
+      "type": "string",
+      "pattern": "^EVT[0-9]{12}$",
+      "description": "Server-assigned public identifier; never the internal key."
+    },
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Emitter-generated idempotency key, unique per source."
+    },
+    "eventType": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$",
+      "maxLength": 64,
+      "description": "Stable catalog key; free text is rejected."
+    },
+    "category": {
+      "enum": [
+        "authentication",
+        "authorization",
+        "administration",
+        "configuration",
+        "media",
+        "biometrics",
+        "integration",
+        "navigation",
+        "system",
+        "legacy"
+      ]
+    },
+    "severity": {
+      "enum": ["info", "warning", "error", "critical"]
+    },
+    "outcome": {
+      "enum": ["success", "failure", "denied", "error", "unknown"]
+    },
+    "occurredAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Emitter time; more than five minutes in the future is rejected."
+    },
+    "recordedAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Server write time."
+    },
+    "source": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$",
+      "description": "Platform-owned source or registered module identifier."
+    },
+    "sourceVersion": {
+      "type": ["string", "null"],
+      "maxLength": 64
+    },
+    "emitter": {
+      "enum": ["server", "service", "browser"]
+    },
+    "actor": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "userPublicId": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Z]{2,4}[0-9]{12}$"
+        },
+        "username": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        }
+      }
+    },
+    "subject": {
+      "$ref": "#/$defs/reference"
+    },
+    "resource": {
+      "$ref": "#/$defs/reference"
+    },
+    "correlationId": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+    },
+    "causationId": {
+      "type": ["string", "null"],
+      "pattern": "^EVT[0-9]{12}$"
+    },
+    "requestId": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "sessionId": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "traceId": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "spanId": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{16}$"
+    },
+    "http": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["method", "route", "statusCode", "durationMs"],
+      "properties": {
+        "method": {
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+        },
+        "route": {
+          "type": "string",
+          "pattern": "^/[^\\s?#]{0,255}$",
+          "description": "Route template, never the raw URL or query string."
+        },
+        "statusCode": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600000
+        }
+      }
+    },
+    "client": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "userAgent": {
+          "type": ["string", "null"],
+          "maxLength": 512
+        },
+        "browser": {
+          "type": ["string", "null"],
+          "maxLength": 64
+        },
+        "os": {
+          "type": ["string", "null"],
+          "maxLength": 64
+        },
+        "device": {
+          "type": ["string", "null"],
+          "maxLength": 64
+        },
+        "ip": {
+          "type": ["string", "null"],
+          "maxLength": 64
+        }
+      }
+    },
+    "metadata": {
+      "type": ["object", "null"],
+      "maxProperties": 20,
+      "description": "Flat allowlisted metadata; secrets, credentials, media, embeddings and biometrics are forbidden.",
+      "additionalProperties": {
+        "type": ["string", "boolean", "number", "null"]
+      }
+    },
+    "payloadHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 over the canonical event JSON; detects corruption, it is not a hash chain."
+    }
+  },
+  "$defs": {
+    "reference": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["type", "publicId"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._-]{0,39}$"
+        },
+        "publicId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,64}$"
+        }
+      }
+    }
+  }
+}
