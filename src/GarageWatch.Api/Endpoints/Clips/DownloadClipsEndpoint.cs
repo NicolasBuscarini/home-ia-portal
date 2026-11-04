@@ -61,8 +61,10 @@ public sealed class DownloadClipsEndpoint() : BaseEndpoint("Clips", "DownloadCli
                 $"home-ia-clips-{Guid.NewGuid():N}.zip");
             try
             {
-                await using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write,
-                    FileShare.None, 81_920, useAsync: true))
+                await using var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.None, 81_920, useAsync: true);
+                if (!OperatingSystem.IsWindows())
+                    File.SetUnixFileMode(archivePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
                 {
                     foreach (var item in resolved)
