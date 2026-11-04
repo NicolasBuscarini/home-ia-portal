@@ -48,7 +48,8 @@ public sealed class FfmpegRtspCaptureAdapter(CaptureOptions options) : ISegmentC
             throw new InvalidOperationException("ffmpeg_start_failed", exception);
         }
 
-        var stderrDrain = DrainAsync(process.StandardError);
+        var diagnostics = new FfmpegDiagnostics();
+        var stderrDrain = diagnostics.DrainAsync(process.StandardError);
         var stdoutDrain = DrainAsync(process.StandardOutput);
         try
         {
@@ -91,10 +92,7 @@ public sealed class FfmpegRtspCaptureAdapter(CaptureOptions options) : ISegmentC
 
             await process.WaitForExitAsync(cancellationToken);
             await Task.WhenAll(stderrDrain, stdoutDrain);
-            if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException("ffmpeg_stream_ended");
-            }
+            if (process.ExitCode != 0) throw StreamEnded(diagnostics.Detail);
         }
         finally
         {
@@ -105,6 +103,13 @@ public sealed class FfmpegRtspCaptureAdapter(CaptureOptions options) : ISegmentC
             }
             await Task.WhenAll(stderrDrain, stdoutDrain);
         }
+    }
+
+    private static InvalidOperationException StreamEnded(string detail)
+    {
+        var exception = new InvalidOperationException("ffmpeg_stream_ended");
+        if (!string.IsNullOrEmpty(detail)) exception.Data["ffmpeg_stderr"] = detail;
+        return exception;
     }
 
     private static async Task DrainAsync(StreamReader reader)

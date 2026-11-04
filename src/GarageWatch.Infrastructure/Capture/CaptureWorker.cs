@@ -122,7 +122,8 @@ public sealed class CaptureWorker(
                 UpdateRetainedGaps(spool.CountGaps());
                 Gaps.Add(1, CreateMetricTags("gap"));
                 Reconnects.Add(1, CreateMetricTags("retry"));
-                logger.LogWarning("Fonte de captura indisponível; nova tentativa limitada, motivo={FailureType}", exception.GetType().Name);
+                logger.LogWarning("Fonte de captura indisponível; nova tentativa limitada, motivo={FailureType}, codigo={ErrorCode}, detalhe={Detail}",
+                    exception.GetType().Name, errorCode, exception.Data["ffmpeg_stderr"] as string ?? exception.Message);
                 await Task.Delay(TimeSpan.FromSeconds(Math.Min(30, 1 << (failures - 1))), stoppingToken);
             }
             finally { TryDeleteDirectory(workDirectory); }
