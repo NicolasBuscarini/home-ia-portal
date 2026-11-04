@@ -12,9 +12,10 @@ public sealed class GetClipMediaEndpoint() : BaseEndpoint("Clips", "GetClipMedia
     "Validates the current clips.read scope and the stored SHA-256, then serves a derived MP4 copy (video and AAC audio when present) with byte-range support. Browsers cannot demux the stored MPEG-TS clip.")
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
-        routes.MapGet("/api/v1/clips/{publicId}/media", async (string publicId, ClaimsPrincipal principal,
-            UserManager<ApplicationUser> users, ClipLibraryService library, ClipPlaybackCache playback,
-            IMonitoringClipsClient clips, HttpRequest request, CancellationToken cancellationToken) =>
+        routes.MapGet("/api/v1/clips/{publicId}/media", async (string publicId, bool? download,
+            ClaimsPrincipal principal, UserManager<ApplicationUser> users, ClipLibraryService library,
+            ClipPlaybackCache playback, IMonitoringClipsClient clips, HttpRequest request,
+            CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);
             if (user is null || !user.IsActive) return Results.Unauthorized();
@@ -35,7 +36,7 @@ public sealed class GetClipMediaEndpoint() : BaseEndpoint("Clips", "GetClipMedia
                     upstream.Dispose();
                     return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
                 }
-                return new UpstreamStreamResult(upstream);
+                return new UpstreamStreamResult(upstream, download == true ? $"{publicId}.mp4" : null);
             }
             if (!await ClipLibraryService.HasValidHashAsync(result.MediaPath!, result.Details.MediaSha256!,
                     cancellationToken))
@@ -45,7 +46,9 @@ public sealed class GetClipMediaEndpoint() : BaseEndpoint("Clips", "GetClipMedia
             if (playbackPath is null)
                 return Results.Json(new ApiErrorResponse("clip_playback_unavailable"),
                     statusCode: StatusCodes.Status503ServiceUnavailable);
-            return Results.File(playbackPath, "video/mp4", enableRangeProcessing: true);
+            return Results.File(playbackPath, "video/mp4",
+                fileDownloadName: download == true ? $"{publicId}.mp4" : null,
+                enableRangeProcessing: download != true);
         }).RequireAuthorization().Produces<byte[]>(StatusCodes.Status200OK, "video/mp4")
             .Produces<byte[]>(StatusCodes.Status206PartialContent, "video/mp4")
             .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)

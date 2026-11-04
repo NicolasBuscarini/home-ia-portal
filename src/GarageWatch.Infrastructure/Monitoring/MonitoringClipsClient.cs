@@ -16,6 +16,14 @@ public sealed class MonitoringClipsClient(
         };
         parameters.AddRange(query.CameraIds.Select(cameraId =>
             $"cameraIds={Uri.EscapeDataString(cameraId)}"));
+        if (query.PublicId is not null)
+            parameters.Add($"publicId={Uri.EscapeDataString(query.PublicId)}");
+        if (query.MinDurationSeconds.HasValue)
+            parameters.Add($"minDurationSeconds={query.MinDurationSeconds.Value}");
+        if (query.MaxDurationSeconds.HasValue)
+            parameters.Add($"maxDurationSeconds={query.MaxDurationSeconds.Value}");
+        if (query.Analysis is not null)
+            parameters.Add($"analysis={Uri.EscapeDataString(query.Analysis)}");
         if (query.FromUtc.HasValue)
             parameters.Add($"fromUtc={Uri.EscapeDataString(query.FromUtc.Value.ToString("O"))}");
         if (query.ToUtc.HasValue)

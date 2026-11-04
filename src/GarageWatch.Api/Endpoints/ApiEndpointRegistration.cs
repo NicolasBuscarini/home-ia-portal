@@ -17,6 +17,7 @@ public static class ApiEndpointRegistration
             new Admin.GetClipRetentionEndpoint(), new Admin.UpdateClipRetentionEndpoint(),
             new Admin.UpdateClipPreservationEndpoint(),
             new Clips.ListClipsEndpoint(), new Clips.GetClipEndpoint(), new Clips.GetClipMediaEndpoint(),
+            new Clips.DownloadClipsEndpoint(),
             new Clips.GetClipThumbnailEndpoint(),
             new Admin.ListContextsEndpoint(), new Admin.CreateContextEndpoint(),
             new Admin.UpdateContextEndpoint(), new Admin.DeactivateContextEndpoint(),

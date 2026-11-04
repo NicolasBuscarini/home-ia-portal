@@ -41,7 +41,7 @@ public sealed class OpenApiEndpointTests
 
         var operations = json.RootElement.GetProperty("paths").EnumerateObject()
             .SelectMany(path => path.Value.EnumerateObject().Select(method => method.Value)).ToArray();
-        Assert.Equal(74, operations.Length);
+        Assert.Equal(75, operations.Length);
         var operationIds = operations.Select(operation => operation.GetProperty("operationId").GetString()).ToArray();
         Assert.Equal(operationIds.Length, operationIds.Distinct(StringComparer.Ordinal).Count());
         Assert.Contains("GetPortalHealth", operationIds);
@@ -72,6 +72,7 @@ public sealed class OpenApiEndpointTests
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "AdminReplaceUserAccessProfiles" &&
             operation.GetProperty("requestBody").GetProperty("content").TryGetProperty("application/json", out _));
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "GetClipTriggerConfiguration");
+        Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "DownloadClips");
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "UpdateClipTriggerConfiguration" &&
             operation.GetProperty("requestBody").GetProperty("content").TryGetProperty("application/json", out _));
         Assert.Contains(operations, operation => operation.GetProperty("operationId").GetString() == "GetClipAnalysisDispatchPolicy");

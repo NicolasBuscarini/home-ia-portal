@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -40,6 +41,15 @@ public sealed class ClipLibraryRemoteApiTests
         Assert.Equal(fake.PublicCameraId, body.GetProperty("items")[0].GetProperty("cameraId").GetString());
         Assert.Equal(internalCameraId, Assert.Single(fake.LastQuery!.CameraIds));
 
+        using var filtered = await admin.GetAsync(
+            $"/api/v1/clips?publicId={publicId}&minDurationSeconds=1&maxDurationSeconds=3600" +
+            "&analysis=performed&page=1&pageSize=25");
+        Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
+        Assert.Equal(publicId, fake.LastQuery.PublicId);
+        Assert.Equal(1, fake.LastQuery.MinDurationSeconds);
+        Assert.Equal(3600, fake.LastQuery.MaxDurationSeconds);
+        Assert.Equal("performed", fake.LastQuery.Analysis);
+
         using var detail = await admin.GetAsync($"/api/v1/clips/{publicId}");
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
         var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
@@ -55,6 +65,21 @@ public sealed class ClipLibraryRemoteApiTests
         Assert.Equal(HttpStatusCode.PartialContent, media.StatusCode);
         Assert.Equal("video/mp4", media.Content.Headers.ContentType?.MediaType);
         Assert.Equal("bytes 0-63/128", media.Content.Headers.ContentRange?.ToString());
+
+        using var download = await admin.GetAsync($"/api/v1/clips/{publicId}/media?download=true");
+        Assert.Equal(HttpStatusCode.PartialContent, download.StatusCode);
+        var disposition = download.Content.Headers.ContentDisposition;
+        Assert.NotNull(disposition);
+        Assert.Equal("attachment", disposition.DispositionType);
+        Assert.Contains(publicId, disposition.FileName);
+
+        using var bulk = await admin.GetAsync($"/api/v1/clips/download?ids={publicId}");
+        Assert.Equal(HttpStatusCode.OK, bulk.StatusCode);
+        Assert.Equal("application/zip", bulk.Content.Headers.ContentType?.MediaType);
+        using var archive = new ZipArchive(await bulk.Content.ReadAsStreamAsync(), ZipArchiveMode.Read);
+        var entry = Assert.Single(archive.Entries);
+        Assert.Equal($"{publicId}.mp4", entry.FullName);
+        Assert.Equal(64, entry.Length);
     }
 
     [Fact]

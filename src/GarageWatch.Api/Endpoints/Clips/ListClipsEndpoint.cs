@@ -10,17 +10,19 @@ public sealed class ListClipsEndpoint() : BaseEndpoint("Clips", "ListClips", "Li
     "Returns a bounded chronological page of clips filtered by camera, UTC interval and media state.")
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
-        routes.MapGet("/api/v1/clips", async (string? cameraId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc,
-            string? state, int? page, int? pageSize, ClaimsPrincipal principal, UserManager<ApplicationUser> users,
-            ClipLibraryService library, CancellationToken cancellationToken) =>
+        routes.MapGet("/api/v1/clips", async (string? cameraId, string? publicId, DateTimeOffset? fromUtc,
+            DateTimeOffset? toUtc, string? state, int? minDurationSeconds, int? maxDurationSeconds,
+            string? analysis, int? page, int? pageSize, ClaimsPrincipal principal,
+            UserManager<ApplicationUser> users, ClipLibraryService library, CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);
             if (user is null || !user.IsActive) return Results.Unauthorized();
             var admin = await users.IsInRoleAsync(user, "Administrator");
             try
             {
-                var result = await library.ListAsync(user.Id, admin, cameraId, fromUtc, toUtc, state,
-                    page ?? 1, pageSize ?? 25, cancellationToken);
+                var result = await library.ListAsync(user.Id, admin, cameraId, publicId, fromUtc, toUtc,
+                    state, minDurationSeconds, maxDurationSeconds, analysis, page ?? 1, pageSize ?? 25,
+                    cancellationToken);
                 var items = result.Items.Select(item => new ClipListItemResponse(item.PublicId, item.CameraId,
                     item.StartedAtUtc, item.EndedAtUtc, item.State, item.ArchiveStatus, item.AnalysisStatus,
                     item.ThumbnailUrl, item.SizeBytes, item.TriggerReason, item.TriggerConfigVersion,
