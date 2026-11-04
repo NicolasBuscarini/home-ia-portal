@@ -82,7 +82,8 @@ public sealed class SystemProfileEndpointTests
     [Fact]
     public async Task Health_endpoints_return_minimal_status_without_dependency_details()
     {
-        using var factory = new ApiFactory();
+        using var factory = new ApiFactory(monitoringMode: "remote", monitoringStatusSource: "remote",
+            monitoringModuleClient: new CapturingModuleClient());
         using var client = factory.CreateClient();
         await AuthenticateAsync(client);
         await AuthenticateAsync(client);
@@ -100,9 +101,9 @@ public sealed class SystemProfileEndpointTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("ready", body.RootElement.GetProperty("status").GetString());
         var capture = body.RootElement.GetProperty("capture");
-        Assert.Equal("synthetic-video-test-pattern", capture.GetProperty("adapter").GetString());
-        Assert.Equal("2.0", capture.GetProperty("adapterVersion").GetString());
-        Assert.Contains("synthetic-video", capture.GetProperty("capabilities").EnumerateArray()
+        Assert.Equal("remote-monitoring", capture.GetProperty("adapter").GetString());
+        Assert.Equal("external", capture.GetProperty("adapterVersion").GetString());
+        Assert.Contains("remote-capture", capture.GetProperty("capabilities").EnumerateArray()
             .Select(value => value.GetString()));
         Assert.Equal("capturing", capture.GetProperty("state").GetString());
         Assert.DoesNotContain("RTSP", body.RootElement.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -133,7 +134,8 @@ public sealed class SystemProfileEndpointTests
     [Fact]
     public async Task Capture_failure_degrades_readiness_without_affecting_liveness()
     {
-        using var factory = new ApiFactory(captureAdapter: new UnavailableCaptureAdapter());
+        using var factory = new ApiFactory(monitoringMode: "remote", monitoringStatusSource: "remote",
+            monitoringModuleClient: new UnreachableModuleClient());
         using var client = factory.CreateClient();
         await AuthenticateAsync(client);
         using var live = await client.GetAsync("/health/live");
@@ -156,13 +158,13 @@ public sealed class SystemProfileEndpointTests
         {
             Assert.Equal(HttpStatusCode.ServiceUnavailable, readiness.StatusCode);
             Assert.Equal("degraded", body.RootElement.GetProperty("status").GetString());
-            Assert.Equal("reconnecting", body.RootElement.GetProperty("capture").GetProperty("state").GetString());
-            Assert.Equal("capture_source_unavailable", body.RootElement.GetProperty("capture").GetProperty("lastErrorCode").GetString());
+            Assert.Equal("unreachable", body.RootElement.GetProperty("capture").GetProperty("state").GetString());
+            Assert.Equal("monitoring_unreachable", body.RootElement.GetProperty("capture").GetProperty("lastErrorCode").GetString());
         }
 
         using var cameraStatus = await client.GetAsync("/api/v1/cameras");
         using var cameras = JsonDocument.Parse(await cameraStatus.Content.ReadAsStringAsync());
-        Assert.Equal("reconnecting", cameras.RootElement[0].GetProperty("status").GetString());
+        Assert.Equal("stopped", cameras.RootElement[0].GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, cameras.RootElement[0].GetProperty("streamEpoch").ValueKind);
     }
 

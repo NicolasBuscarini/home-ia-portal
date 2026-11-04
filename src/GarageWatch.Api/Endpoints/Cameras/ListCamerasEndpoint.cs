@@ -15,7 +15,7 @@ public sealed class ListCamerasEndpoint() : BaseEndpoint("Cameras", "ListCameras
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/cameras", async (ClaimsPrincipal principal, UserManager<ApplicationUser> users,
-            ICameraCatalog catalog, IamDbContext database, CaptureOptions options, CaptureWorker capture,
+            ICameraCatalog catalog, IamDbContext database, CaptureOptions options,
             IMonitoringModuleClient monitoring, MonitoringModuleOptions monitoringOptions,
             CancellationToken cancellationToken) =>
         {
@@ -29,8 +29,8 @@ public sealed class ListCamerasEndpoint() : BaseEndpoint("Cameras", "ListCameras
                     cancellationToken);
             var activeCamera = cameras.SingleOrDefault(camera =>
                 internalCameraIds.GetValueOrDefault(camera.CameraId) == options.CameraId);
-            var (status, epoch) = await ReadActiveStatusAsync(activeCamera?.CameraId, options, capture,
-                monitoring, monitoringOptions, cancellationToken);
+            var (status, epoch) = await ReadActiveStatusAsync(activeCamera?.CameraId, options,
+                monitoring, cancellationToken);
             return Results.Ok(cameras.Select(camera => new CameraSummaryResponse(camera.CameraId, camera.ContextId,
                 camera.Name, camera.CameraId == activeCamera?.CameraId ? status : "stopped",
                 camera.CameraId == activeCamera?.CameraId ? epoch : null,
@@ -39,12 +39,10 @@ public sealed class ListCamerasEndpoint() : BaseEndpoint("Cameras", "ListCameras
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 
     private static async Task<(string Status, string? Epoch)> ReadActiveStatusAsync(string? activeCameraPublicId,
-        CaptureOptions captureOptions, CaptureWorker capture, IMonitoringModuleClient monitoring,
-        MonitoringModuleOptions monitoringOptions, CancellationToken cancellationToken)
+        CaptureOptions captureOptions, IMonitoringModuleClient monitoring,
+        CancellationToken cancellationToken)
     {
         if (activeCameraPublicId is null) return ("stopped", null);
-        if (monitoringOptions.StatusSource == MonitoringModuleOptions.LocalStatus)
-            return (capture.Status.State, capture.Status.StreamEpoch);
 
         var remote = await monitoring.GetCameraStatusAsync(captureOptions.CameraId, cancellationToken);
         if (!remote.Reachable) return ("stopped", null);

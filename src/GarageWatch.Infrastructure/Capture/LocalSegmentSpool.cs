@@ -3,6 +3,8 @@ using System.Text.Json;
 
 namespace GarageWatch.Infrastructure.Capture;
 
+public sealed record CapturedSegment(string SourcePath, DateTimeOffset StartedAt, DateTimeOffset EndedAt);
+
 public sealed record SegmentManifestV1(
     string SchemaVersion,
     string SegmentId,

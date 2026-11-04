@@ -34,7 +34,6 @@ public static class DependencyInjection
         services.AddSingleton<IBiometricDataProtector, Biometrics.AesGcmBiometricDataProtector>();
         services.AddSingleton<IIntegrationCredentialProtector, Integrations.AesGcmIntegrationCredentialProtector>();
         services.AddScoped<IIntegrationCredentialStore, Integrations.IntegrationCredentialStore>();
-        services.AddSingleton<Biometrics.BiometricRetentionWorker>();
         services.AddDbContext<IamDbContext>((provider, options) =>
         {
             var settings = provider.GetRequiredService<IConfiguration>();
@@ -139,10 +138,6 @@ public static class DependencyInjection
         services.AddSingleton(provider => new MonitoringServiceTokenIssuer(
             provider.GetRequiredService<MonitoringServiceTokenOptions>(), TimeProvider.System));
         services.AddTransient<MonitoringServiceTokenHandler>();
-        if (!captureOptions.LocalCaptureEnabled &&
-            monitoringOptions.StatusSource != MonitoringModuleOptions.Remote)
-            throw new InvalidOperationException(
-                "CAPTURE_AUTHORITY=remote exige MONITORING_STATUS_SOURCE=remote para evitar status local enganoso.");
         services.AddSingleton(provider => MonitoringModuleOptions.FromConfiguration(
             provider.GetRequiredService<IConfiguration>()));
         services.AddHttpClient("monitoring-module", client =>
@@ -192,45 +187,16 @@ public static class DependencyInjection
         services.AddSingleton<FaceExtractorRuntime>();
         services.AddSingleton<IFaceEnrollmentExtractor, OnnxFaceEnrollmentExtractor>();
         services.AddSingleton<VersionedEventRuleEngine>();
-        services.AddSingleton<LocalEventJournal>();
-        services.AddSingleton<IEventJournal>(provider =>
-            provider.GetRequiredService<MonitoringModuleOptions>().EventsSource == MonitoringModuleOptions.Remote
-                ? provider.GetRequiredService<RemoteEventJournal>()
-                : provider.GetRequiredService<LocalEventJournal>());
+        services.AddSingleton<IEventJournal>(provider => provider.GetRequiredService<RemoteEventJournal>());
         services.AddSingleton<LocalSegmentSpool>();
-        services.AddSingleton<ISegmentCaptureAdapter>(captureOptions.Profile == "synthetic"
-            ? new SyntheticSegmentCaptureAdapter(captureOptions)
-            : new FfmpegRtspCaptureAdapter(captureOptions));
         services.AddSingleton<IVisualChangeDetector, FfmpegVisualChangeDetector>();
-        services.AddSingleton<IObjectDetector, OnnxObjectDetector>();
-        services.AddSingleton<IObjectTracker, GreedyIouObjectTracker>();
-        services.AddSingleton<DetectionProcessor>();
-        services.AddSingleton<ObjectDetectionWorker>();
         services.AddSingleton<IClipMediaAssembler>(provider =>
-            provider.GetRequiredService<MonitoringModuleOptions>().ClipsWriteSource ==
-            MonitoringModuleOptions.Remote
-                ? ActivatorUtilities.CreateInstance<RemoteClipMediaAssembler>(provider)
-                : ActivatorUtilities.CreateInstance<LocalClipMediaAssembler>(provider));
+            ActivatorUtilities.CreateInstance<RemoteClipMediaAssembler>(provider));
         services.AddSingleton<ClipPlaybackCache>();
-        services.AddSingleton<IClipArchiveAdapter, LocalFilesystemClipArchiveAdapter>();
-        services.AddSingleton<ClipArchiveWorker>();
-        services.AddSingleton<ClipRetentionWorker>();
-        services.AddSingleton<IClipArchiveCapacityManager>(provider => provider.GetRequiredService<ClipRetentionWorker>());
         services.AddScoped<ClipLibraryService>();
         services.AddSingleton<IClipAnalysisAutoDispatcher, ClipAnalysisAutoDispatcher>();
         services.AddSingleton<ClipTriggerWorker>();
-        services.AddSingleton<CaptureWorker>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ClipTriggerWorker>());
-        if (monitoringOptions.RetentionSource != MonitoringModuleOptions.Remote)
-        {
-            services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ClipArchiveWorker>());
-            services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ClipRetentionWorker>());
-        }
-        if (monitoringOptions.BiometricsSource != MonitoringModuleOptions.Remote)
-            services.AddSingleton<IHostedService>(provider =>
-                provider.GetRequiredService<Biometrics.BiometricRetentionWorker>());
-        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ObjectDetectionWorker>());
-        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CaptureWorker>());
         return services;
     }
 }

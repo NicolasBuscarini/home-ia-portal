@@ -54,43 +54,6 @@ public sealed class EventRuleEngineTests
     }
 
     [Fact]
-    public async Task Local_journal_is_checksum_validated_append_only_and_idempotent_after_recovery()
-    {
-        var root = Path.Combine(Path.GetTempPath(), $"garagewatch-events-{Guid.NewGuid():N}");
-        var options = new EventEngineOptions(null, null, root, 2, 1_048_576);
-        try
-        {
-            var occurrence = Assert.Single(new VersionedEventRuleEngine().Process(
-                Frame("f1", 0, BoxAt(.5, .5)), RuleSet(new EventRuleV1("dwell", 1,
-                    EventRuleKind.ZoneDwell, "person.in_zone", EventAlertLevel.Attention, 0, 5,
-                    "person", .5f, ZonePolygon: Square(), MinimumDwellSeconds: 0))).Events);
-            var journal = new LocalEventJournal(options);
-            Assert.Equal(EventAppendStatus.Created, await journal.AppendAsync(occurrence, CancellationToken.None));
-            Assert.Equal(EventAppendStatus.Duplicate, await journal.AppendAsync(occurrence, CancellationToken.None));
-
-            var recoveredJournal = new LocalEventJournal(options);
-            var recovery = await recoveredJournal.RecoverAsync(CancellationToken.None);
-            Assert.Equal(1, recovery.RecoveredEvents);
-            Assert.Equal(0, recovery.InvalidEvents);
-            Assert.Equal(EventAppendStatus.Duplicate, await recoveredJournal.AppendAsync(occurrence, CancellationToken.None));
-            var second = occurrence with { EventId = Guid.NewGuid().ToString("N") };
-            Assert.Equal(EventAppendStatus.Created, await recoveredJournal.AppendAsync(second, CancellationToken.None));
-            Assert.Equal(EventAppendStatus.CapacityReached,
-                await recoveredJournal.AppendAsync(second with { EventId = Guid.NewGuid().ToString("N") }, CancellationToken.None));
-
-            var storedPath = Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories).First();
-            await File.AppendAllTextAsync(storedPath, "tamper");
-            var afterTamper = await new LocalEventJournal(options).RecoverAsync(CancellationToken.None);
-            Assert.Equal(1, afterTamper.InvalidEvents);
-            Assert.Equal(1, afterTamper.RecoveredEvents);
-        }
-        finally
-        {
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
     public void Rules_reject_degenerate_geometry_and_out_of_range_coordinates()
     {
         var invalid = RuleSet(new EventRuleV1("bad", 1, EventRuleKind.ZoneDwell, "person.in_zone",

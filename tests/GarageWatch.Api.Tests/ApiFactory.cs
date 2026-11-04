@@ -18,7 +18,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly ISystemProfileSource? _profileSource;
     private readonly ILoggerProvider? _loggerProvider;
-    private readonly ISegmentCaptureAdapter? _captureAdapter;
     private readonly string _databasePath;
     private readonly string _dataProtectionPath;
     private readonly string _captureSpoolPath;
@@ -36,6 +35,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly string _monitoringRosterSource;
     private readonly string _monitoringRetentionSource;
     private readonly string _monitoringBiometricsSource;
+    private readonly string _monitoringLiveSource;
     private readonly GarageWatch.Application.Monitoring.IMonitoringCaptureClient? _monitoringCaptureClient;
     private readonly GarageWatch.Application.Monitoring.IMonitoringClipsClient? _monitoringClipsClient;
     private readonly GarageWatch.Application.Monitoring.IMonitoringEventsClient? _monitoringEventsClient;
@@ -43,11 +43,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly GarageWatch.Application.Monitoring.IMonitoringRosterClient? _monitoringRosterClient;
     private readonly GarageWatch.Application.Monitoring.IMonitoringRetentionClient? _monitoringRetentionClient;
     private readonly GarageWatch.Application.Monitoring.IMonitoringBiometricClient? _monitoringBiometricClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringModuleClient? _monitoringModuleClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringLiveClient? _monitoringLiveClient;
     private readonly GarageWatch.Application.Portal.IActivityWatchModule? _activityWatchModule;
     private readonly string _activityWatchBaseUrl;
 
     public ApiFactory(ISystemProfileSource? profileSource = null, ILoggerProvider? loggerProvider = null,
-        ISegmentCaptureAdapter? captureAdapter = null, string? databasePath = null,
+        string? databasePath = null,
         string? bootstrapUsername = "contract-user", string? bootstrapPassword = "Contract-Password-123!",
         string environment = "Testing", IPublicIdGenerator? publicIdGenerator = null,
         bool useCameraCapture = false, ICameraConnectionManager? cameraConnectionManager = null,
@@ -64,6 +66,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         GarageWatch.Application.Monitoring.IMonitoringRosterClient? monitoringRosterClient = null,
         string monitoringRetentionSource = "local",
         GarageWatch.Application.Monitoring.IMonitoringRetentionClient? monitoringRetentionClient = null,
+        string monitoringLiveSource = "local",
+        GarageWatch.Application.Monitoring.IMonitoringLiveClient? monitoringLiveClient = null,
+        GarageWatch.Application.Monitoring.IMonitoringModuleClient? monitoringModuleClient = null,
         string monitoringBiometricsSource = "local",
         GarageWatch.Application.Monitoring.IMonitoringBiometricClient? monitoringBiometricClient = null,
         GarageWatch.Application.Portal.IActivityWatchModule? activityWatchModule = null,
@@ -71,7 +76,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     {
         _profileSource = profileSource;
         _loggerProvider = loggerProvider;
-        _captureAdapter = captureAdapter;
         Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "garagewatch-tests"));
         _databasePath = databasePath ?? Path.Combine(Path.GetTempPath(), "garagewatch-tests", $"{Guid.NewGuid():N}.db");
         _dataProtectionPath = dataProtectionPath ??
@@ -91,6 +95,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         _monitoringRosterSource = monitoringRosterSource;
         _monitoringRetentionSource = monitoringRetentionSource;
         _monitoringBiometricsSource = monitoringBiometricsSource;
+        _monitoringLiveSource = monitoringLiveSource;
+        _monitoringLiveClient = monitoringLiveClient;
+        _monitoringModuleClient = monitoringModuleClient;
         _monitoringCaptureClient = monitoringCaptureClient;
         _monitoringClipsClient = monitoringClipsClient;
         _monitoringEventsClient = monitoringEventsClient;
@@ -124,6 +131,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["MONITORING_ROSTER_SOURCE"] = _monitoringRosterSource,
             ["MONITORING_RETENTION_SOURCE"] = _monitoringRetentionSource,
             ["MONITORING_BIOMETRICS_SOURCE"] = _monitoringBiometricsSource,
+            ["MONITORING_LIVE_SOURCE"] = _monitoringLiveSource,
             ["MONITORING_BASE_URL"] = "http://monitoring.invalid",
             ["MONITORING_SERVICE_TOKEN_SECRET"] = "test-monitoring-service-secret-0123456789abcdef",
             ["ACTIVITYWATCH_BASE_URL"] = _activityWatchBaseUrl,
@@ -149,11 +157,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 services.RemoveAll<ISystemProfileSource>();
                 services.AddSingleton<ISystemProfileSource>(profileSource);
             }
-            if (_captureAdapter is not null)
-            {
-                services.RemoveAll<ISegmentCaptureAdapter>();
-                services.AddSingleton(_captureAdapter);
-            }
             if (_useCameraCapture)
             {
                 services.RemoveAll<CaptureOptions>();
@@ -164,6 +167,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 services.RemoveAll<ICameraConnectionManager>();
                 services.AddSingleton(_cameraConnectionManager);
+            }
+            if (_monitoringModuleClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringModuleClient>();
+                services.AddSingleton(_monitoringModuleClient);
+            }
+            if (_monitoringLiveClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringLiveClient>();
+                services.AddSingleton(_monitoringLiveClient);
             }
             if (_monitoringCaptureClient is not null)
             {
@@ -208,22 +221,6 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         });
     }
 }
-
-public sealed class UnavailableCaptureAdapter : ISegmentCaptureAdapter
-{
-    public string Name => "contract-unavailable-source";
-    public string Version => "1.0";
-    public IReadOnlyList<string> Capabilities => ["contract-test"];
-
-    public async IAsyncEnumerable<CapturedSegment> CaptureAsync(string workDirectory,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await Task.Yield();
-        if (cancellationToken.IsCancellationRequested) yield break;
-        throw new InvalidOperationException("contract_source_unavailable");
-    }
-}
-
 public sealed class ThrowingSystemProfileSource : ISystemProfileSource
 {
     public SystemProfile Get() => throw new InvalidOperationException("secret-value-must-not-leak");

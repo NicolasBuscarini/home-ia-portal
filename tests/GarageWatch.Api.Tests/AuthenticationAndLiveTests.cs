@@ -51,7 +51,7 @@ public sealed class AuthenticationAndLiveTests
     [Fact]
     public async Task CameraAndLiveEndpointsRequireSessionAndLoginIssuesHttpOnlyCookie()
     {
-        await using var factory = new ApiFactory();
+        await using var factory = new ApiFactory(monitoringMode: "remote", monitoringStatusSource: "remote", monitoringModuleClient: new CapturingModuleClient(), monitoringLiveSource: "remote", monitoringLiveClient: new SlidingPlaylistLiveClient());
         using var anonymous = factory.CreateClient(new() { AllowAutoRedirect = false });
         using var panel = await anonymous.GetAsync("/");
         Assert.Equal(HttpStatusCode.OK, panel.StatusCode);
@@ -166,7 +166,9 @@ public sealed class AuthenticationAndLiveTests
             var m3u8 = await playlist.Content.ReadAsStringAsync();
             Assert.Contains("#EXTM3U", m3u8, StringComparison.Ordinal);
             var firstSequence = ReadMediaSequence(m3u8);
-            var segmentUrl = m3u8.Split('\n').First(line => line.StartsWith("/api/v1/live/", StringComparison.Ordinal)).Trim();
+            var segmentUrl = m3u8.Split('\n').First(line => line.StartsWith("/api/v1/live/", StringComparison.Ordinal)).Trim()
+                .Replace("/live/capture-test/", $"/live/{cameraJson.RootElement[0].GetProperty("cameraId").GetString()}/",
+                    StringComparison.Ordinal);
             using var segment = await session.GetAsync(segmentUrl);
             Assert.Equal(HttpStatusCode.OK, segment.StatusCode);
             Assert.True((await segment.Content.ReadAsByteArrayAsync()).Length > 0);
@@ -182,7 +184,9 @@ public sealed class AuthenticationAndLiveTests
                     var refreshedBody = await refreshedPlaylist.Content.ReadAsStringAsync();
                     refreshedSequence = ReadMediaSequence(refreshedBody);
                     var refreshedFirstSegment = refreshedBody.Split('\n')
-                        .First(line => line.StartsWith("/api/v1/live/", StringComparison.Ordinal)).Trim();
+                        .First(line => line.StartsWith("/api/v1/live/", StringComparison.Ordinal)).Trim()
+                        .Replace("/live/capture-test/", $"/live/{cameraJson.RootElement[0].GetProperty("cameraId").GetString()}/",
+                            StringComparison.Ordinal);
                     if (refreshedSequence > firstSequence && refreshedFirstSegment != segmentUrl)
                     {
                         playlistStartAdvanced = true;
@@ -206,7 +210,7 @@ public sealed class AuthenticationAndLiveTests
     [Fact]
     public async Task InvalidCredentialsAreRejectedWithoutRedirectOrCookie()
     {
-        await using var factory = new ApiFactory();
+        await using var factory = new ApiFactory(monitoringMode: "remote", monitoringStatusSource: "remote", monitoringModuleClient: new CapturingModuleClient(), monitoringLiveSource: "remote", monitoringLiveClient: new SlidingPlaylistLiveClient());
         using var client = factory.CreateClient(new() { AllowAutoRedirect = false });
         using var response = await client.PostAsJsonAsync("/api/v1/auth/login",
             new { username = "contract-user", password = "wrong-password-123" });
@@ -217,7 +221,7 @@ public sealed class AuthenticationAndLiveTests
     [Fact]
     public async Task Viewer_can_monitor_but_cannot_read_administrative_status()
     {
-        await using var factory = new ApiFactory();
+        await using var factory = new ApiFactory(monitoringMode: "remote", monitoringStatusSource: "remote", monitoringModuleClient: new CapturingModuleClient(), monitoringLiveSource: "remote", monitoringLiveClient: new SlidingPlaylistLiveClient());
         using var client = factory.CreateClient(new() { AllowAutoRedirect = false });
         using (var scope = factory.Services.CreateScope())
         {

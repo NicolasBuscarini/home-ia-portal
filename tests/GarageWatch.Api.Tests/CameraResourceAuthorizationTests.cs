@@ -17,7 +17,7 @@ public sealed class CameraResourceAuthorizationTests
     [Fact]
     public async Task Live_playlist_segments_and_ranges_are_scoped_to_assigned_profile_and_camera_pair()
     {
-        await using var factory = new ApiFactory();
+        await using var factory = new ApiFactory(monitoringMode: "remote", monitoringStatusSource: "remote", monitoringModuleClient: new CapturingModuleClient(), monitoringLiveSource: "remote", monitoringLiveClient: new SlidingPlaylistLiveClient());
         var cameraId = "capture-test";
         string cameraPublicId;
         Guid adminId;
@@ -61,7 +61,8 @@ public sealed class CameraResourceAuthorizationTests
             Assert.Equal(HttpStatusCode.OK, playlist.StatusCode);
             var playlistText = await playlist.Content.ReadAsStringAsync();
             var segmentPath = playlistText.Split('\n')
-                .First(line => line.StartsWith("/api/v1/live/", StringComparison.Ordinal)).Trim();
+                .First(line => line.StartsWith("/api/v1/live/", StringComparison.Ordinal)).Trim()
+                .Replace($"/live/{cameraId}/", $"/live/{cameraPublicId}/", StringComparison.Ordinal);
 
             using var authorizedRange = new HttpRequestMessage(HttpMethod.Get, segmentPath);
             authorizedRange.Headers.Range = new RangeHeaderValue(0, 9);
