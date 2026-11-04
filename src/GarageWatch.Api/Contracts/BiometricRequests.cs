@@ -6,4 +6,9 @@ public sealed record EnrollBiometricRequest(string? UserPublicId, string? MediaT
 public sealed record BiometricEnrollmentResponse(string PublicId, string UserPublicId, string Status,
     DateTimeOffset EnrolledAtUtc, DateTimeOffset ExpiresAtUtc, DateTimeOffset? RevokedAtUtc, string RevokedReason,
     string ModelId, string ModelVersion, int Dimensions, string KeyVersion, string ConsentVersion,
-    DateTimeOffset ConsentAcceptedAtUtc);
+    DateTimeOffset ConsentAcceptedAtUtc, string? PersonPublicId);
+
+public sealed record LinkBiometricPersonRequest(string? PersonPublicId);
+
+public sealed record BiometricPersonLinkResponse(string EnrollmentPublicId, string PersonPublicId,
+    DateTimeOffset LinkedAtUtc);

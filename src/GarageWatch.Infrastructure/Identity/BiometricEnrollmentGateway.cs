@@ -14,6 +14,9 @@ public interface IBiometricEnrollmentGateway
     Task<IReadOnlyList<BiometricEnrollmentSummary>> ListAsync(Guid actorId, string? userPublicId,
         CancellationToken cancellationToken);
 
+    Task<BiometricEnrollmentSummary> GetForAdministrationAsync(string enrollmentPublicId,
+        CancellationToken cancellationToken);
+
     Task<BiometricEnrollmentSummary> EnrollAsync(Guid actorId, string? userPublicId, FaceCropV1 crop,
         string? consentVersion, CancellationToken cancellationToken);
 
@@ -25,6 +28,10 @@ public sealed class LocalBiometricEnrollmentGateway(BiometricEnrollmentService s
 {
     public Task<IReadOnlyList<BiometricEnrollmentSummary>> ListAsync(Guid actorId, string? userPublicId,
         CancellationToken cancellationToken) => service.ListAsync(actorId, userPublicId, cancellationToken);
+
+    public Task<BiometricEnrollmentSummary> GetForAdministrationAsync(string enrollmentPublicId,
+        CancellationToken cancellationToken) =>
+        service.GetForAdministrationAsync(enrollmentPublicId, cancellationToken);
 
     public Task<BiometricEnrollmentSummary> EnrollAsync(Guid actorId, string? userPublicId, FaceCropV1 crop,
         string? consentVersion, CancellationToken cancellationToken) =>
@@ -41,7 +48,8 @@ public sealed class LocalBiometricEnrollmentGateway(BiometricEnrollmentService s
 public sealed class RemoteBiometricEnrollmentGateway(IamDbContext database, AccessProfileService profiles,
     IBiometricDataProtector protector, IEnumerable<IFaceEnrollmentExtractor> extractors,
     IMonitoringBiometricClient client, IIamUnitOfWork unitOfWork, IIamAuditEventRepository audit,
-    TimeProvider timeProvider, ILogger<RemoteBiometricEnrollmentGateway> logger) : IBiometricEnrollmentGateway
+    TimeProvider timeProvider, ILogger<RemoteBiometricEnrollmentGateway> logger,
+    IBiometricPersonLinkStore links) : IBiometricEnrollmentGateway
 {
     public async Task<IReadOnlyList<BiometricEnrollmentSummary>> ListAsync(Guid actorId, string? userPublicId,
         CancellationToken cancellationToken)
@@ -51,6 +59,25 @@ public sealed class RemoteBiometricEnrollmentGateway(IamDbContext database, Acce
         {
             var items = await client.ListAsync(target.PublicId!, cancellationToken);
             return items.Select(Map).ToArray();
+        }
+        catch (MonitoringBiometricsUnavailableException)
+        {
+            throw new BiometricEnrollmentUnavailableException("biometrics_store_unavailable");
+        }
+    }
+
+    public async Task<BiometricEnrollmentSummary> GetForAdministrationAsync(string enrollmentPublicId,
+        CancellationToken cancellationToken)
+    {
+        if (!PublicIdFormat.IsValid(enrollmentPublicId, PublicIdPrefixes.BiometricEnrollmentPrefix))
+            throw new KeyNotFoundException("biometric_enrollment_not_found");
+        try
+        {
+            return Map(await client.GetAsync(enrollmentPublicId, cancellationToken));
+        }
+        catch (MonitoringBiometricsRejectedException)
+        {
+            throw new KeyNotFoundException("biometric_enrollment_not_found");
         }
         catch (MonitoringBiometricsUnavailableException)
         {
@@ -115,9 +142,11 @@ public sealed class RemoteBiometricEnrollmentGateway(IamDbContext database, Acce
         await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
             foreach (var replaced in result.ReplacedPublicIds)
+            {
+                await links.UnlinkActiveForEnrollmentAsync(replaced, now, token);
                 audit.Append(actorId, target.Id, "biometric.enrollment_revoked", replaced, now);
+            }
             audit.Append(actorId, target.Id, "biometric.enrollment_created", result.Enrollment.PublicId, now);
-            await Task.CompletedTask;
             return true;
         }, cancellationToken);
         return Map(result.Enrollment);
@@ -164,8 +193,8 @@ public sealed class RemoteBiometricEnrollmentGateway(IamDbContext database, Acce
         var now = timeProvider.GetUtcNow();
         await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
+            await links.UnlinkActiveForEnrollmentAsync(enrollmentPublicId, now, token);
             audit.Append(actorId, subject?.Id, "biometric.enrollment_revoked", enrollmentPublicId, now);
-            await Task.CompletedTask;
             return true;
         }, cancellationToken);
     }

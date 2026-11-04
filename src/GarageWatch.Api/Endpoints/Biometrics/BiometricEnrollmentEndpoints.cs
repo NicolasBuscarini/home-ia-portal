@@ -9,19 +9,22 @@ using Microsoft.AspNetCore.Identity;
 namespace GarageWatch.Api.Endpoints.Biometrics;
 
 public sealed class ListBiometricEnrollmentsEndpoint() : BaseEndpoint("Biometrics", "ListBiometricEnrollments",
-    "List biometric enrollments", "Returns status, expiry and model metadata of encrypted embeddings; it never returns embedding values or images.")
+    "List biometric enrollments", "Returns status, expiry, model metadata and the optional roster link of encrypted embeddings; it never returns embedding values or images.")
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/biometrics/enrollments", async (string? userPublicId, ClaimsPrincipal principal,
             UserManager<ApplicationUser> users, IBiometricEnrollmentGateway enrollments,
-            CancellationToken cancellationToken) =>
+            IBiometricPersonLinkStore links, CancellationToken cancellationToken) =>
         {
             var actor = await users.GetUserAsync(principal);
             if (actor is null) return Results.Unauthorized();
             try
             {
                 var items = await enrollments.ListAsync(actor.Id, userPublicId, cancellationToken);
-                return Results.Ok(items.Select(Map).ToArray());
+                var linkedPeople = await links.GetActiveForEnrollmentsAsync(
+                    items.Select(item => item.PublicId).ToArray(), cancellationToken);
+                return Results.Ok(items.Select(item =>
+                    Map(item, linkedPeople.GetValueOrDefault(item.PublicId))).ToArray());
             }
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("biometric_enrollment_not_found")); }
             catch (UnauthorizedAccessException) { return Results.StatusCode(StatusCodes.Status403Forbidden); }
@@ -36,10 +39,10 @@ public sealed class ListBiometricEnrollmentsEndpoint() : BaseEndpoint("Biometric
             .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 
-    internal static BiometricEnrollmentResponse Map(BiometricEnrollmentSummary item) => new(item.PublicId,
-        item.UserPublicId, item.Status, item.EnrolledAtUtc, item.ExpiresAtUtc, item.RevokedAtUtc, item.RevokedReason,
-        item.ModelId, item.ModelVersion, item.Dimensions, item.KeyVersion, item.ConsentVersion,
-        item.ConsentAcceptedAtUtc);
+    internal static BiometricEnrollmentResponse Map(BiometricEnrollmentSummary item, string? personPublicId = null) =>
+        new(item.PublicId, item.UserPublicId, item.Status, item.EnrolledAtUtc, item.ExpiresAtUtc, item.RevokedAtUtc,
+            item.RevokedReason, item.ModelId, item.ModelVersion, item.Dimensions, item.KeyVersion,
+            item.ConsentVersion, item.ConsentAcceptedAtUtc, personPublicId);
 }
 
 public sealed class EnrollBiometricEndpoint() : BaseEndpoint("Biometrics", "EnrollBiometric",

@@ -32,6 +32,7 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
     public DbSet<ClipAnalysisJob> ClipAnalysisJobs => Set<ClipAnalysisJob>();
     public DbSet<KnownPerson> KnownPeople => Set<KnownPerson>();
     public DbSet<BiometricEnrollment> BiometricEnrollments => Set<BiometricEnrollment>();
+    public DbSet<BiometricPersonLink> BiometricPersonLinks => Set<BiometricPersonLink>();
     public DbSet<FaceExtractorCandidate> FaceExtractorCandidates => Set<FaceExtractorCandidate>();
     public DbSet<FaceExtractorSelection> FaceExtractorSelections => Set<FaceExtractorSelection>();
     public DbSet<ClipRetentionPolicy> ClipRetentionPolicies => Set<ClipRetentionPolicy>();
@@ -262,6 +263,17 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
             entity.HasOne(item => item.User).WithMany().HasForeignKey(item => item.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
             ConfigurePublicId(entity, PublicIdPrefixes.BiometricEnrollmentPrefix);
+        });
+        builder.Entity<BiometricPersonLink>(entity =>
+        {
+            entity.HasKey(link => link.Id);
+            entity.Property(link => link.EnrollmentPublicId).HasMaxLength(32).IsRequired();
+            entity.Property(link => link.KnownPersonPublicId).HasMaxLength(32).IsRequired();
+            entity.Property(link => link.LinkedAtUtc).HasConversion(UtcTicksConverter);
+            entity.Property(link => link.UnlinkedAtUtc).HasConversion(NullableUtcTicksConverter);
+            entity.HasIndex(link => link.EnrollmentPublicId).IsUnique()
+                .HasFilter("\"UnlinkedAtUtc\" IS NULL");
+            entity.HasIndex(link => new { link.KnownPersonPublicId, link.UnlinkedAtUtc });
         });
         builder.Entity<FaceExtractorCandidate>(entity =>
         {

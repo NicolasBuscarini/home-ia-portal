@@ -31,7 +31,7 @@ public sealed class BiometricEnrollmentRejectedException(string code) : Exceptio
 public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOfWork unitOfWork,
     IIamAuditEventRepository audit, AccessProfileService profiles, IBiometricDataProtector protector,
     IEnumerable<IFaceEnrollmentExtractor> extractors, TimeProvider timeProvider, IPublicIdGenerator publicIds,
-    ILogger<BiometricEnrollmentService> logger)
+    ILogger<BiometricEnrollmentService> logger, IBiometricPersonLinkStore links)
 {
     public const string ManagePermission = "biometrics.manage";
     private const int ExpiryBatch = 100;
@@ -46,6 +46,20 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
             .OrderByDescending(item => item.CreatedAtUtc).ThenBy(item => item.Id)
             .Take(20).ToArrayAsync(cancellationToken);
         return rows.Select(item => Map(item, target.PublicId!)).ToArray();
+    }
+
+    public async Task<BiometricEnrollmentSummary> GetForAdministrationAsync(string enrollmentPublicId,
+        CancellationToken cancellationToken)
+    {
+        if (!PublicIdFormat.IsValid(enrollmentPublicId, PublicIdPrefixes.BiometricEnrollmentPrefix))
+            throw new KeyNotFoundException("biometric_enrollment_not_found");
+        await ExpireDueAsync(cancellationToken);
+        var row = await database.BiometricEnrollments.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.PublicId == enrollmentPublicId, cancellationToken)
+            ?? throw new KeyNotFoundException("biometric_enrollment_not_found");
+        var userPublicId = await database.Users.AsNoTracking()
+            .Where(user => user.Id == row.UserId).Select(user => user.PublicId).SingleAsync(cancellationToken);
+        return Map(row, userPublicId!);
     }
 
     public async Task<BiometricEnrollmentSummary> EnrollAsync(Guid actorId, string? userPublicId, FaceCropV1 crop,
@@ -98,6 +112,7 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
                     previous.RevokedAtUtc = now;
                     previous.RevokedReason = "replaced";
                     ClearPayload(previous);
+                    await links.UnlinkActiveForEnrollmentAsync(previous.PublicId!, now, token);
                     audit.Append(actorId, target.Id, "biometric.enrollment_revoked", previous.PublicId, now);
                 }
                 var enrollment = new BiometricEnrollment
@@ -153,6 +168,7 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
             enrollment.RevokedAtUtc = now;
             enrollment.RevokedReason = isOwner ? "owner_request" : "administrator_request";
             ClearPayload(enrollment);
+            await links.UnlinkActiveForEnrollmentAsync(enrollment.PublicId!, now, token);
             audit.Append(actorId, enrollment.UserId, "biometric.enrollment_revoked", enrollment.PublicId, now);
             return true;
         }, cancellationToken);
@@ -174,6 +190,7 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
                 enrollment.RevokedAtUtc = now;
                 enrollment.RevokedReason = "expired";
                 ClearPayload(enrollment);
+                await links.UnlinkActiveForEnrollmentAsync(enrollment.PublicId!, now, token);
                 audit.Append(null, enrollment.UserId, "biometric.enrollment_expired", enrollment.PublicId, now);
             }
             await Task.CompletedTask;

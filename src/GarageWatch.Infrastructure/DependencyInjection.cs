@@ -85,6 +85,8 @@ public static class DependencyInjection
         services.AddScoped<IKnownPeopleGateway, RemoteKnownPeopleGateway>();
         services.AddScoped<FaceExtractorRegistryService>();
         services.AddScoped<BiometricEnrollmentService>();
+        services.AddScoped<IBiometricPersonLinkStore, BiometricPersonLinkStore>();
+        services.AddScoped<BiometricPersonLinkService>();
         services.AddScoped<LocalBiometricEnrollmentGateway>();
         services.AddScoped<RemoteBiometricEnrollmentGateway>();
         services.AddScoped<IBiometricEnrollmentGateway, RemoteBiometricEnrollmentGateway>();

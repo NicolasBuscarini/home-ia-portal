@@ -7,6 +7,8 @@ public interface IKnownPeopleGateway
 {
     Task<KnownPersonPage> ListAsync(int page, int pageSize, CancellationToken cancellationToken);
 
+    Task<KnownPersonSummary> GetAsync(string publicId, CancellationToken cancellationToken);
+
     Task<KnownPersonResult> CreateAsync(Guid actorId, string? displayName, string? purpose,
         bool authorizationConfirmed, CancellationToken cancellationToken);
 
@@ -19,16 +21,32 @@ public interface IKnownPeopleGateway
 /// surfaced instead of silently losing the trail.
 /// </summary>
 public sealed class RemoteKnownPeopleGateway(IMonitoringRosterClient client, IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents, TimeProvider timeProvider) : IKnownPeopleGateway
+    IIamAuditEventRepository auditEvents, TimeProvider timeProvider, IBiometricPersonLinkStore links)
+    : IKnownPeopleGateway
 {
+    private const int LookupPageSize = 100;
+    private const int LookupMaximumPages = 20;
+
     public async Task<KnownPersonPage> ListAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
         if (page < 1 || pageSize is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(page), "Paginação fora dos limites.");
         var result = await client.ListAsync(page, pageSize, cancellationToken);
-        return new KnownPersonPage(result.Items.Select(person => new KnownPersonSummary(person.PublicId,
-            person.DisplayName, person.Purpose, person.AuthorizationRecordedAtUtc, person.CreatedAtUtc,
-            person.Version)).ToArray(), result.Page, result.PageSize, result.Total);
+        return new KnownPersonPage(result.Items.Select(Map).ToArray(), result.Page, result.PageSize, result.Total);
+    }
+
+    public async Task<KnownPersonSummary> GetAsync(string publicId, CancellationToken cancellationToken)
+    {
+        if (!PublicIdFormat.IsValid(publicId, PublicIdPrefixes.KnownPersonPrefix))
+            throw new KeyNotFoundException("known_person_not_found");
+        for (var page = 1; page <= LookupMaximumPages; page++)
+        {
+            var result = await client.ListAsync(page, LookupPageSize, cancellationToken);
+            var match = result.Items.FirstOrDefault(person => person.PublicId == publicId);
+            if (match is not null) return Map(match);
+            if (result.Items.Count < LookupPageSize || (long)page * LookupPageSize >= result.Total) break;
+        }
+        throw new KeyNotFoundException("known_person_not_found");
     }
 
     public async Task<KnownPersonResult> CreateAsync(Guid actorId, string? displayName, string? purpose,
@@ -61,10 +79,15 @@ public sealed class RemoteKnownPeopleGateway(IMonitoringRosterClient client, IIa
             throw new KeyNotFoundException("Pessoa não encontrada.");
         await client.RemoveAsync(publicId, cancellationToken);
         var now = timeProvider.GetUtcNow();
-        await unitOfWork.ExecuteAtomicallyAsync(token =>
+        await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
+            await links.UnlinkActiveForPersonAsync(publicId, now, token);
             auditEvents.Append(actorId, null, "known_person.removed", publicId, now);
-            return Task.FromResult(0);
+            return 0;
         }, cancellationToken);
     }
+
+    private static KnownPersonSummary Map(MonitoringRosterPerson person) => new(person.PublicId,
+        person.DisplayName, person.Purpose, person.AuthorizationRecordedAtUtc, person.CreatedAtUtc,
+        person.Version);
 }

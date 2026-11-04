@@ -10,8 +10,8 @@ public sealed record KnownPersonPage(IReadOnlyList<KnownPersonSummary> Items, in
 public sealed record KnownPersonResult(string PublicId, string DisplayName, string Purpose,
     DateTimeOffset AuthorizationRecordedAtUtc, DateTimeOffset CreatedAtUtc, long Version);
 public sealed class KnownPersonService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds)
-    : IKnownPeopleGateway
+    IIamAuditEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds,
+    IBiometricPersonLinkStore links) : IKnownPeopleGateway
 {
     public async Task<KnownPersonResult> CreateAsync(Guid actorId, string? displayName, string? purpose,
         bool authorizationConfirmed, CancellationToken cancellationToken)
@@ -60,6 +60,17 @@ public sealed class KnownPersonService(IamDbContext database, IIamUnitOfWork uni
         return new(items, page, pageSize, total);
     }
 
+    public async Task<KnownPersonSummary> GetAsync(string publicId, CancellationToken cancellationToken)
+    {
+        if (!PublicIdFormat.IsValid(publicId, PublicIdPrefixes.KnownPersonPrefix))
+            throw new KeyNotFoundException("known_person_not_found");
+        var person = await database.KnownPeople.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.PublicId == publicId && item.DeletedAtUtc == null, cancellationToken)
+            ?? throw new KeyNotFoundException("known_person_not_found");
+        return new KnownPersonSummary(person.PublicId!, person.DisplayName!, person.Purpose!,
+            person.AuthorizationRecordedAtUtc!.Value, person.CreatedAtUtc, person.Version);
+    }
+
     public Task RemoveAsync(Guid actorId, string publicId, CancellationToken cancellationToken) =>
         unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
@@ -75,6 +86,7 @@ public sealed class KnownPersonService(IamDbContext database, IIamUnitOfWork uni
             person.AuthorizationRecordedAtUtc = null;
             person.DeletedAtUtc = now;
             person.Version++;
+            await links.UnlinkActiveForPersonAsync(publicId, now, token);
             auditEvents.Append(actorId, null, "known_person.removed", publicId, now);
         }, cancellationToken);
 

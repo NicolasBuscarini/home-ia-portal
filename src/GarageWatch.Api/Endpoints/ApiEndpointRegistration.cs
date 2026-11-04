@@ -32,6 +32,7 @@ public static class ApiEndpointRegistration
             new Admin.ReplaceUserAccessProfilesEndpoint(),
             new Admin.ListAccessRequestsEndpoint(), new Admin.ReviewAccessRequestEndpoint(),
             new Admin.ListKnownPeopleEndpoint(), new Admin.CreateKnownPersonEndpoint(), new Admin.RemoveKnownPersonEndpoint(),
+            new Admin.LinkBiometricPersonEndpoint(), new Admin.UnlinkBiometricPersonEndpoint(),
             new Admin.GetFaceExtractorRegistryEndpoint(), new Admin.CreateFaceExtractorCandidateEndpoint(),
             new Admin.SelectFaceExtractorEndpoint(),
             new Admin.ListPortalModulesEndpoint(), new Admin.CreatePortalModuleEndpoint(),

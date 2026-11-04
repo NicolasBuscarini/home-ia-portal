@@ -327,6 +327,42 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.ToTable("BiometricEnrollments");
                 });
 
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.BiometricPersonLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EnrollmentPublicId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("KnownPersonPublicId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LinkedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("LinkedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UnlinkedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnrollmentPublicId")
+                        .IsUnique()
+                        .HasFilter("\"UnlinkedAtUtc\" IS NULL");
+
+                    b.HasIndex("KnownPersonPublicId", "UnlinkedAtUtc");
+
+                    b.ToTable("BiometricPersonLinks");
+                });
+
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.CameraAccessGrant", b =>
                 {
                     b.Property<Guid>("Id")
