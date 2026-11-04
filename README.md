@@ -35,9 +35,11 @@ As operações HTTP seguem Minimal APIs, cada uma em arquivo/classe própria, co
 
 `src/GarageWatch.Api/wwwroot/` existe vazia (com `.gitkeep`) porque o manifesto de static web assets gerado por `dotnet build`/testes referencia esse caminho; sem ela, `dotnet run` falha ao iniciar mesmo servindo o bundle de `/app/web`. Artefatos `bin/`/`obj/` gerados dentro do Compose ficam no workspace montado e devem ser limpos antes de recriar a API se houver troca entre build de teste e execução dev.
 
-## Monitoramento remoto (T16-C-A)
+## Monitoramento remoto (T16-E/ADR109)
 
-O host consulta o contrato do módulo Monitoramento em `GET /api/v1/portal/modules/monitoring/health`. `MONITORING_EXECUTION_MODE=in-process` (padrão) devolve a projeção local; `remote` chama `MONITORING_BASE_URL/api/v1/monitoring/contract` com timeout de 3 s e falha sanitizada (503). `MONITORING_STATUS_SOURCE=local` (padrão) mantém o status de `/api/v1/cameras` no `CaptureWorker`; `remote` lê o read model de status do serviço. O serviço `home-ia-monitoring` é `status-read-only` (`T16-C-B-A`): lê manifests/gaps do spool e reporta `capturing`/`stale`/`unavailable`, mas ainda não captura, não escreve mídia e não serve HLS/clips. A captura continua no monólito; o corte do writer é `T16-C-B-B`.
+O host consulta o contrato do módulo Monitoramento em `GET /api/v1/portal/modules/monitoring/health`. Desde a ADR109, o padrão é `remote`: `MONITORING_EXECUTION_MODE=remote`, `CAPTURE_AUTHORITY=remote` e todas as `MONITORING_*_SOURCE=remote`; o serviço `home-ia-monitoring` é dono da câmera, spool, clipes, journal, análise, roster, retenção, biometria cifrada e HLS, enquanto o portal mantém trigger, autorização, manifesto/estado do clipe e projeção de recursos (ADR108). `MONITORING_BASE_URL` precisa ser uma URI HTTP(S) interna válida; a chamada tem timeout de 3 s e falha sanitizada (503).
+
+**Código embutido (rollback-only).** `in-process`/`local` e a implementação embutida de Monitoramento (Capture, Spool, HLS, clipes, eventos, análise, roster, retenção, biometria) permanecem apenas para rollback de configuração sobre o mesmo spool. Não recebem funcionalidade nova; a remoção está planejada em `T16-REMOVE-EMBEDDED`. Pela raiz, `./garage up` e `./garage camera` sobem esse serviço (captura `synthetic`/`ffmpeg-rtsp`) antes da API, e `./garage restart-active-api` sobe o serviço quando ele estiver ausente. O rollback é aplicado pelo `./garage` com `PLATFORM_CAPTURE_AUTHORITY=local`, `PLATFORM_MONITORING_EXECUTION_MODE=in-process` e `PLATFORM_MONITORING_*_SOURCE=local` no `.env` raiz, com o serviço de Monitoramento parado para não existirem dois writers no mesmo spool.
 
 ## Portal (T16-B)
 

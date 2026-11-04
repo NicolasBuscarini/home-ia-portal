@@ -1,3 +1,6 @@
+// ROLLBACK-ONLY (ADR109): o caminho `in-process`/`local` e a implementação embutida de
+// Monitoramento existem apenas para rollback de configuração sobre o mesmo spool.
+// Não adicionar funcionalidade nova aqui; a remoção está planejada em T16-REMOVE-EMBEDDED.
 using Microsoft.Extensions.Configuration;
 
 namespace GarageWatch.Infrastructure.Monitoring;
