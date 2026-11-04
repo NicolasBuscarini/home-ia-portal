@@ -147,7 +147,7 @@ public sealed class AuthenticationAndLiveTests
         using var profileResponse = await session.GetAsync("/api/v1/system-profile");
         Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode);
         using var profileJson = System.Text.Json.JsonDocument.Parse(await profileResponse.Content.ReadAsStringAsync());
-        Assert.Equal("garage-watch-platform", profileJson.RootElement.GetProperty("serviceName").GetString());
+        Assert.Equal("home-ia-portal", profileJson.RootElement.GetProperty("serviceName").GetString());
         Assert.True(profileJson.RootElement.TryGetProperty("applicationVersion", out _));
 
         HttpResponseMessage? playlist = null;

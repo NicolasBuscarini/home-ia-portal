@@ -43,7 +43,7 @@ public static class ObservabilityConfiguration
 
         services.AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddService(
-                serviceName: "garage-watch-platform",
+                serviceName: "home-ia-portal",
                 serviceVersion: serviceVersion,
                 serviceInstanceId: null,
                 autoGenerateServiceInstanceId: false)

@@ -1,4 +1,4 @@
-# garage-watch-platform
+# home-ia-portal
 
 Novo repositório da fundação T01 da Garagem IA. Não contém nem substitui o protótipo T00a em `projects/garage-watch`.
 

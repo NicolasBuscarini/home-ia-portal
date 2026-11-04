@@ -12,6 +12,6 @@ public sealed class EnvironmentSystemProfileSource(IHostEnvironment hostEnvironm
         var version = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion ?? "0.0.0";
 
-        return new SystemProfile("garage-watch-platform", hostEnvironment.EnvironmentName, version);
+        return new SystemProfile("home-ia-portal", hostEnvironment.EnvironmentName, version);
     }
 }

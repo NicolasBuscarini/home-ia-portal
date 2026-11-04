@@ -1,6 +1,6 @@
 services:
   api:
-    image: garage-watch-platform-dev
+    image: home-ia-portal-dev
     cpus: "${PLATFORM_API_CPUS:-2.0}"
     mem_limit: "${PLATFORM_API_MEMORY_LIMIT:-3g}"
     build:
@@ -133,7 +133,7 @@ services:
       - http://0.0.0.0:8080
 
   test:
-    image: garage-watch-platform-dev
+    image: home-ia-portal-dev
     build:
       context: .
       additional_contexts:
@@ -203,7 +203,7 @@ services:
       - "8554"
 
   rtsp-test-publisher:
-    image: garage-watch-platform-dev
+    image: home-ia-portal-dev
     build:
       context: .
       additional_contexts:
@@ -238,7 +238,7 @@ services:
         done
 
   api-rtsp-contract:
-    image: garage-watch-platform-dev
+    image: home-ia-portal-dev
     build:
       context: .
       additional_contexts:
@@ -457,3 +457,5 @@ volumes:
   platform_web_node_modules:
   activitywatch_web_node_modules:
   activitywatch_data:
+    # Mantido do projeto anterior para preservar o histórico do ActivityWatch (ADR109, runbook 19).
+    name: garage-watch-platform_activitywatch_data

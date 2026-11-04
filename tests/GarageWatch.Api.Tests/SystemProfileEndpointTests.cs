@@ -24,7 +24,7 @@ public sealed class SystemProfileEndpointTests
         Assert.Equal(requestedId, response.Headers.GetValues(CorrelationMiddleware.HeaderName).Single());
         Assert.Equal("1.0", body.RootElement.GetProperty("schemaVersion").GetString());
         Assert.Equal(requestedId, body.RootElement.GetProperty("correlationId").GetString());
-        Assert.Equal("garage-watch-platform", body.RootElement.GetProperty("serviceName").GetString());
+        Assert.Equal("home-ia-portal", body.RootElement.GetProperty("serviceName").GetString());
         Assert.True(body.RootElement.TryGetProperty("applicationVersion", out _));
     }
 

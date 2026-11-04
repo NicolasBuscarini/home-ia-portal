@@ -1,4 +1,4 @@
-# Instruções do projeto garage-watch-platform
+# Instruções do projeto home-ia-portal
 
 ## Autoridade e escopo
 - Repositório independente para a fundação do produto T01 e instrumentação observável T01-O; o protótipo `garage-watch` continua experimento T00a isolado.

@@ -167,7 +167,9 @@ public static class DependencyInjection
         services.AddScoped<IMonitoringBiometricClient, MonitoringBiometricClient>();
         services.AddScoped<IMonitoringAnalysisClient, MonitoringAnalysisClient>();
         services.AddScoped<IMonitoringLiveClient, MonitoringLiveClient>();
-        services.AddScoped<IMonitoringClipMediaClient, MonitoringClipMediaClient>();
+        // O assembler remoto de clipes é singleton; o cliente não mantém estado e só usa
+        // IHttpClientFactory + options, ambos singleton, então também é registrado como singleton.
+        services.AddSingleton<IMonitoringClipMediaClient, MonitoringClipMediaClient>();
         services.AddSingleton<IMonitoringEventsClient, MonitoringEventsClient>();
         services.AddSingleton<RemoteEventJournal>();
         var activityWatchOptions = ActivityWatchOptions.FromConfiguration(configuration);
