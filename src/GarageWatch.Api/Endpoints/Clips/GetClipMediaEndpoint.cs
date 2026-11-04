@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Identity;
 namespace GarageWatch.Api.Endpoints.Clips;
 
 public sealed class GetClipMediaEndpoint() : BaseEndpoint("Clips", "GetClipMedia", "Stream authorized clip media",
-    "Validates the current clips.read scope and the stored SHA-256, then serves a derived video-only MP4 copy with byte-range support. Browsers cannot demux the stored MPEG-TS clip.")
+    "Validates the current clips.read scope and the stored SHA-256, then serves a derived MP4 copy (video and AAC audio when present) with byte-range support. Browsers cannot demux the stored MPEG-TS clip.")
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/clips/{publicId}/media", async (string publicId, ClaimsPrincipal principal,
@@ -18,8 +18,8 @@ public sealed class GetClipMediaEndpoint() : BaseEndpoint("Clips", "GetClipMedia
         {
             var user = await users.GetUserAsync(principal);
             if (user is null || !user.IsActive) return Results.Unauthorized();
-            var result = await library.GetAsync(user.Id, await users.IsInRoleAsync(user, "Administrator"), publicId,
-                cancellationToken);
+            var administrator = await users.IsInRoleAsync(user, "Administrator");
+            var result = await library.GetAsync(user.Id, administrator, publicId, cancellationToken);
             if (result.Details is null || (result.MediaPath is null && !result.RemoteMedia)) return Results.NotFound();
             if (result.RemoteMedia)
             {
@@ -41,7 +41,7 @@ public sealed class GetClipMediaEndpoint() : BaseEndpoint("Clips", "GetClipMedia
                     cancellationToken))
                 return Results.NotFound();
             var playbackPath = await playback.EnsureAsync(Path.GetFileNameWithoutExtension(result.MediaPath!),
-                result.MediaPath!, result.Details.MediaSha256!, cancellationToken);
+                result.MediaPath!, result.Details.MediaSha256!, administrator, cancellationToken);
             if (playbackPath is null)
                 return Results.Json(new ApiErrorResponse("clip_playback_unavailable"),
                     statusCode: StatusCodes.Status503ServiceUnavailable);

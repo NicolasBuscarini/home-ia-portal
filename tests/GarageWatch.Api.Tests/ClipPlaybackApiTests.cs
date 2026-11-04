@@ -16,7 +16,7 @@ namespace GarageWatch.Api.Tests;
 public sealed class ClipPlaybackApiTests
 {
     [Fact]
-    public async Task Media_endpoint_serves_derived_mp4_without_audio_and_reuses_the_cache()
+    public async Task Media_endpoint_serves_derived_mp4_with_audio_and_reuses_the_cache()
     {
         await using var factory = new ApiFactory();
         var capture = factory.Services.GetRequiredService<CaptureOptions>();
@@ -31,9 +31,9 @@ public sealed class ClipPlaybackApiTests
         Assert.Equal("ftyp", System.Text.Encoding.ASCII.GetString(bytes, 4, 4));
 
         var derived = Path.Combine(capture.SpoolDirectory, "clips", "playback");
-        var cached = Path.Combine(derived, $"{clip.ClipId}-{clip.MediaSha256![..12]}.mp4");
+        var cached = Path.Combine(derived, $"{clip.ClipId}-{clip.MediaSha256![..12]}-a1.mp4");
         Assert.True(File.Exists(cached), cached);
-        Assert.Equal(["video"], await ProbeStreamKindsAsync(cached));
+        Assert.Equal(["video", "audio"], await ProbeStreamKindsAsync(cached));
         var writtenAt = File.GetLastWriteTimeUtc(cached);
 
         using var second = await admin.GetAsync($"/api/v1/clips/{clip.PublicId}/media");
@@ -85,8 +85,8 @@ public sealed class ClipPlaybackApiTests
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         var playback = Path.Combine(spool, "clips", "playback");
-        Assert.True(File.Exists(Path.Combine(playback, $"{newer.ClipId}-{newer.MediaSha256![..12]}.mp4")));
-        Assert.False(File.Exists(Path.Combine(playback, $"{older.ClipId}-{older.MediaSha256![..12]}.mp4")));
+        Assert.True(File.Exists(Path.Combine(playback, $"{newer.ClipId}-{newer.MediaSha256![..12]}-a1.mp4")));
+        Assert.False(File.Exists(Path.Combine(playback, $"{older.ClipId}-{older.MediaSha256![..12]}-a1.mp4")));
     }
 
     private static async Task<string[]> ProbeStreamKindsAsync(string path)
