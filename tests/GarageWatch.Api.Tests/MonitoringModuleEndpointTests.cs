@@ -8,9 +8,9 @@ namespace GarageWatch.Api.Tests;
 public sealed class MonitoringModuleEndpointTests
 {
     [Fact]
-    public async Task Monitoring_module_health_requires_session_and_reports_in_process_mode()
+    public async Task Monitoring_module_health_requires_session_and_reports_the_remote_contract()
     {
-        await using var factory = new ApiFactory();
+        await using var factory = new ApiFactory(monitoringModuleClient: new CapturingModuleClient());
         using var anonymous = factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await anonymous.GetAsync("/api/v1/portal/modules/monitoring/health")).StatusCode);
@@ -26,7 +26,7 @@ public sealed class MonitoringModuleEndpointTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("monitoring", json.RootElement.GetProperty("moduleId").GetString());
-        Assert.Equal("in-process", json.RootElement.GetProperty("executionMode").GetString());
+        Assert.Equal("remote", json.RootElement.GetProperty("executionMode").GetString());
         Assert.True(json.RootElement.GetProperty("reachable").GetBoolean());
     }
 }

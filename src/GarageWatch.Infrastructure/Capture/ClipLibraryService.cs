@@ -196,9 +196,16 @@ public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext data
     private async Task<Dictionary<string, (bool IsPreserved, long Version)>> PreservationStatesAsync(
         string[] clipPublicIds, CancellationToken cancellationToken)
     {
-        if (clipPublicIds.Length == 0) return new(StringComparer.Ordinal);
-        return await (retention ?? throw new InvalidOperationException("clip_retention_gateway_unavailable"))
-            .GetPreservationStatesAsync(clipPublicIds, cancellationToken);
+        if (clipPublicIds.Length == 0 || retention is null) return new(StringComparer.Ordinal);
+        try
+        {
+            return await retention.GetPreservationStatesAsync(clipPublicIds, cancellationToken);
+        }
+        catch (MonitoringRetentionUnavailableException)
+        {
+            // Preservação é enriquecimento: uma indisponibilidade do serviço não esconde o clipe.
+            return new(StringComparer.Ordinal);
+        }
     }
 
     // A indisponibilidade da análise é um estado degradado do módulo, não um erro da listagem:

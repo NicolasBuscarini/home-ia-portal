@@ -15,7 +15,8 @@ public sealed class PortalHealthApiTests
     [Fact]
     public async Task Aggregated_health_distinguishes_portal_modules_and_integration_without_leaking_details()
     {
-        await using var factory = new ApiFactory(activityWatchModule: new StubActivityWatchModule(Summary(true)));
+        await using var factory = new ApiFactory(activityWatchModule: new StubActivityWatchModule(Summary(true)),
+            monitoringModuleClient: new CapturingModuleClient());
         using var admin = await LoginAsync(factory, "contract-user", "Contract-Password-123!");
 
         using var response = await admin.GetAsync("/api/v1/portal/health");
@@ -33,7 +34,7 @@ public sealed class PortalHealthApiTests
         var monitoring = modules["monitoring"];
         Assert.Equal("module", monitoring.GetProperty("kind").GetString());
         Assert.Equal("healthy", monitoring.GetProperty("status").GetString());
-        Assert.Contains("health", monitoring.GetProperty("capabilities").EnumerateArray()
+        Assert.Contains("remote-capture", monitoring.GetProperty("capabilities").EnumerateArray()
             .Select(item => item.GetString()));
         var administration = modules["administration"];
         Assert.Equal("module", administration.GetProperty("kind").GetString());
@@ -57,7 +58,8 @@ public sealed class PortalHealthApiTests
     public async Task Disabled_and_unavailable_modules_are_reported_and_change_the_aggregate_status()
     {
         await using var factory = new ApiFactory(
-            activityWatchModule: new StubActivityWatchModule(Summary(false), healthy: false));
+            activityWatchModule: new StubActivityWatchModule(Summary(false), healthy: false),
+            monitoringModuleClient: new CapturingModuleClient());
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         var activityWatch = await database.PortalModules.SingleAsync(module => module.ModuleId == "activitywatch");
@@ -87,7 +89,8 @@ public sealed class PortalHealthApiTests
     [Fact]
     public async Task Module_without_a_known_probe_is_unknown_and_degrades_the_aggregate()
     {
-        await using var factory = new ApiFactory(activityWatchModule: new StubActivityWatchModule(Summary(true)));
+        await using var factory = new ApiFactory(activityWatchModule: new StubActivityWatchModule(Summary(true)),
+            monitoringModuleClient: new CapturingModuleClient());
         using var admin = await LoginAsync(factory, "contract-user", "Contract-Password-123!");
         admin.DefaultRequestHeaders.Add("Origin", "http://localhost");
         using var created = await admin.PostAsJsonAsync("/api/v1/admin/portal-modules", new

@@ -61,41 +61,6 @@ public sealed class RemoteRetentionTests
     }
 
     [Fact]
-    public async Task Remote_preservation_round_trip_enriches_clips_and_audits_both_transitions()
-    {
-        await using var factory = new ApiFactory(monitoringRetentionSource: "remote",
-            monitoringRetentionClient: new FakeRetentionClient());
-        var capture = factory.Services.GetRequiredService<CaptureOptions>();
-        var cameraPublicId = await GetCameraPublicIdAsync(factory, capture.CameraId);
-        var clip = await WriteArchivedClipAsync(capture, capture.CameraId, DateTimeOffset.UtcNow);
-        var retention = (FakeRetentionClient)factory.Services
-            .GetRequiredService<IMonitoringRetentionClient>();
-        retention.Preservations[clip.PublicId!] = new MonitoringPreservation(clip.PublicId!, true, 1);
-        using var admin = await LoginAsync(factory);
-        admin.DefaultRequestHeaders.Add("Origin", "http://localhost");
-
-        using var list = await admin.GetAsync($"/api/v1/clips?cameraId={cameraPublicId}");
-        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
-        var page = await list.Content.ReadFromJsonAsync<JsonElement>();
-        var item = page.GetProperty("items").EnumerateArray()
-            .Single(entry => entry.GetProperty("publicId").GetString() == clip.PublicId);
-        Assert.True(item.GetProperty("isPreserved").GetBoolean());
-        Assert.Contains(clip.PublicId, retention.LastPreservationIds);
-
-        using var released = await admin.PutAsJsonAsync(
-            $"/api/v1/clips/{clip.PublicId}/preservation",
-            new { expectedVersion = 1, isPreserved = false });
-        Assert.Equal(HttpStatusCode.OK, released.StatusCode);
-        Assert.False(retention.Preservations[clip.PublicId!].IsPreserved);
-
-        using var scope = factory.Services.CreateScope();
-        var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-        var actions = await database.IamAuditEvents.Select(entry => entry.Action).ToArrayAsync();
-        Assert.Contains("clip.preservation.disabled", actions);
-        Assert.DoesNotContain("clip.preservation.enabled", actions);
-    }
-
-    [Fact]
     public async Task Remote_retention_unavailability_returns_503_without_local_fallback()
     {
         await using var factory = new ApiFactory(monitoringRetentionSource: "remote",

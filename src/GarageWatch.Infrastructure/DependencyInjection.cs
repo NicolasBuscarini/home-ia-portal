@@ -120,20 +120,24 @@ public static class DependencyInjection
         var clipPlaybackOptions = ClipPlaybackOptions.FromEnvironment(configuration, captureOptions);
         var faceExtractorOptions = FaceExtractorOptions.FromEnvironment(configuration);
         var portalOptions = PortalOptions.FromConfiguration(configuration);
-        var monitoringOptions = MonitoringModuleOptions.FromConfiguration(configuration);
-        var monitoringTokenOptions = MonitoringServiceTokenOptions.FromConfiguration(configuration);
-        if (!monitoringTokenOptions.Configured)
-            throw new InvalidOperationException(
-                "MONITORING_SERVICE_TOKEN_SECRET deve ter ao menos 32 bytes quando qualquer fonte do Monitoramento é remote.");
-        services.AddSingleton(monitoringTokenOptions);
+        services.AddSingleton(provider =>
+        {
+            var token = MonitoringServiceTokenOptions.FromConfiguration(
+                provider.GetRequiredService<IConfiguration>());
+            if (!token.Configured)
+                throw new InvalidOperationException(
+                    "MONITORING_SERVICE_TOKEN_SECRET deve ter ao menos 32 bytes: o portal sempre acessa o Monitoramento pelo serviço.");
+            return token;
+        });
         services.AddSingleton(provider => new MonitoringServiceTokenIssuer(
             provider.GetRequiredService<MonitoringServiceTokenOptions>(), TimeProvider.System));
         services.AddTransient<MonitoringServiceTokenHandler>();
         services.AddSingleton(provider => MonitoringModuleOptions.FromConfiguration(
             provider.GetRequiredService<IConfiguration>()));
-        services.AddHttpClient("monitoring-module", client =>
+        services.AddHttpClient("monitoring-module", (provider, client) =>
         {
-            client.BaseAddress = new Uri(monitoringOptions.BaseUrl + "/", UriKind.Absolute);
+            var monitoring = provider.GetRequiredService<MonitoringModuleOptions>();
+            client.BaseAddress = new Uri(monitoring.BaseUrl + "/", UriKind.Absolute);
             client.Timeout = TimeSpan.FromSeconds(3);
         }).AddHttpMessageHandler<MonitoringServiceTokenHandler>();
         services.AddScoped<IMonitoringModuleClient, MonitoringModuleClient>();

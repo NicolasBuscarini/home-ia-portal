@@ -51,15 +51,6 @@ public sealed class MonitoringCaptureApiTests
         Assert.Null(client.LastUpdate);
     }
 
-    [Fact]
-    public async Task Local_mode_returns_conflict_instead_of_fake_capture_settings()
-    {
-        await using var factory = new ApiFactory();
-        using var admin = await LoginAsync(factory);
-        using var response = await admin.GetAsync("/api/v1/admin/monitoring/capture");
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-    }
-
     private static async Task<HttpClient> LoginAsync(WebApplicationFactory<Program> factory)
     {
         var client = factory.CreateClient();

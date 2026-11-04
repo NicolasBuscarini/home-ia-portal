@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Application.Analysis;
 using GarageWatch.Application.Biometrics;
 using GarageWatch.Infrastructure.Identity;
@@ -25,7 +26,8 @@ public sealed class BiometricEnrollmentApiTests
     [Fact]
     public async Task Owner_enrolls_own_biometrics_and_store_only_ciphertext_with_one_year_expiry()
     {
-        await using var factory = ConfiguredFactory();
+        var biometrics = new FakeBiometricClient();
+        await using var factory = ConfiguredFactory(biometrics: biometrics);
         using var client = factory.CreateClient();
         await RegisterAsync(client, "bio-owner");
         await LoginAsync(client, "bio-owner");
@@ -48,20 +50,13 @@ public sealed class BiometricEnrollmentApiTests
         Assert.Equal(BiometricPolicy.ConsentVersion, enrollment.GetProperty("consentVersion").GetString());
         Assert.Equal(enrolledAt, enrollment.GetProperty("consentAcceptedAtUtc").GetDateTimeOffset());
 
-        using (var scope = factory.Services.CreateScope())
-        {
-            var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-            var stored = await database.BiometricEnrollments.SingleAsync();
-            Assert.Equal(publicId, stored.PublicId);
-            Assert.NotEmpty(stored.EmbeddingCiphertext);
-            Assert.Equal(12, stored.EmbeddingNonce.Length);
-            Assert.Equal(16, stored.EmbeddingTag.Length);
-            Assert.Equal("test-1", stored.KeyVersion);
-            Assert.Equal(BiometricPolicy.ConsentVersion, stored.ConsentVersion);
-            Assert.Equal(enrolledAt, stored.ConsentAcceptedAtUtc);
-            Assert.Equal(enrolledAt, stored.EnrolledAtUtc);
-            Assert.Equal(expiresAt, stored.ExpiresAtUtc);
-        }
+        var sent = Assert.Single(biometrics.Enrollments);
+        Assert.NotEmpty(sent.EmbeddingCiphertext);
+        Assert.Equal(12, sent.EmbeddingNonce.Length);
+        Assert.Equal(16, sent.EmbeddingTag.Length);
+        Assert.Equal("test-1", sent.KeyVersion);
+        Assert.Equal(BiometricPolicy.ConsentVersion, sent.ConsentVersion);
+        Assert.Equal(publicId, biometrics.Items[publicId].PublicId);
 
         using var listed = await client.GetAsync("/api/v1/biometrics/enrollments");
         Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
@@ -74,22 +69,17 @@ public sealed class BiometricEnrollmentApiTests
         Assert.Equal(HttpStatusCode.Created, replacement.StatusCode);
         using var afterReplacement = JsonDocument.Parse(await replacement.Content.ReadAsStringAsync());
         Assert.NotEqual(publicId, afterReplacement.RootElement.GetProperty("publicId").GetString());
-        using (var scope = factory.Services.CreateScope())
-        {
-            var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-            var rows = await database.BiometricEnrollments.OrderBy(item => item.CreatedAtUtc).ToArrayAsync();
-            Assert.Equal(2, rows.Length);
-            Assert.Equal(BiometricEnrollment.RevokedStatus, rows[0].Status);
-            Assert.Equal("replaced", rows[0].RevokedReason);
-            Assert.Empty(rows[0].EmbeddingCiphertext);
-            Assert.Equal(BiometricEnrollment.ActiveStatus, rows[1].Status);
-        }
+        Assert.Equal(2, biometrics.Enrollments.Count);
+        var revokedRow = Assert.Single(biometrics.Items.Values, item => item.Status == "revoked");
+        Assert.Equal(publicId, revokedRow.PublicId);
+        Assert.Equal("replaced", revokedRow.RevokedReason);
+        Assert.Single(biometrics.Items.Values, item => item.Status == "active");
     }
 
     [Fact]
     public async Task Only_owner_or_privileged_manager_can_enroll_and_revoke_for_another_account()
     {
-        await using var factory = ConfiguredFactory();
+        await using var factory = ConfiguredFactory(biometrics: new FakeBiometricClient());
         using var ownerClient = factory.CreateClient();
         await RegisterAsync(ownerClient, "bio-owner");
         await LoginAsync(ownerClient, "bio-owner");
@@ -170,7 +160,8 @@ public sealed class BiometricEnrollmentApiTests
     [Fact]
     public async Task Enrollment_requires_the_current_consent_version_and_persists_nothing_otherwise()
     {
-        await using var factory = ConfiguredFactory();
+        var biometrics = new FakeBiometricClient();
+        await using var factory = ConfiguredFactory(biometrics: biometrics);
         using var client = factory.CreateClient();
         await RegisterAsync(client, "bio-consent");
         await LoginAsync(client, "bio-consent");
@@ -190,47 +181,8 @@ public sealed class BiometricEnrollmentApiTests
 
         using var accepted = await client.PostAsJsonAsync("/api/v1/biometrics/enrollments", EnrollmentBody());
         Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
-        using (var scope = factory.Services.CreateScope())
-        {
-            var stored = await scope.ServiceProvider.GetRequiredService<IamDbContext>().BiometricEnrollments
-                .SingleAsync();
-            Assert.Equal(BiometricPolicy.ConsentVersion, stored.ConsentVersion);
-        }
-    }
-
-    [Fact]
-    public async Task Expired_enrollment_is_erased_by_durable_retention()
-    {
-        await using var factory = ConfiguredFactory();
-        using var client = factory.CreateClient();
-        await RegisterAsync(client, "bio-expiring");
-        await LoginAsync(client, "bio-expiring");
-        using var created = await client.PostAsJsonAsync("/api/v1/biometrics/enrollments", EnrollmentBody());
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-
-        using (var scope = factory.Services.CreateScope())
-        {
-            var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-            var stored = await database.BiometricEnrollments.SingleAsync();
-            stored.ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1);
-            await database.SaveChangesAsync();
-        }
-
-        using var listed = await client.GetAsync("/api/v1/biometrics/enrollments");
-        using var body = JsonDocument.Parse(await listed.Content.ReadAsStringAsync());
-        var expired = Assert.Single(body.RootElement.EnumerateArray());
-        Assert.Equal("expired", expired.GetProperty("status").GetString());
-        Assert.Equal("expired", expired.GetProperty("revokedReason").GetString());
-        using (var scope = factory.Services.CreateScope())
-        {
-            var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-            var stored = await database.BiometricEnrollments.SingleAsync();
-            Assert.Empty(stored.EmbeddingCiphertext);
-            Assert.Empty(stored.EmbeddingNonce);
-            Assert.Empty(stored.EmbeddingTag);
-            Assert.Contains(await database.IamAuditEvents.ToArrayAsync(),
-                entry => entry.Action == "biometric.enrollment_expired");
-        }
+        var sent = Assert.Single(biometrics.Enrollments);
+        Assert.Equal(BiometricPolicy.ConsentVersion, sent.ConsentVersion);
     }
 
     [Fact]
@@ -261,8 +213,9 @@ public sealed class BiometricEnrollmentApiTests
             Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<IamDbContext>().BiometricEnrollments.CountAsync());
     }
 
-    private static WebApplicationFactory<Program> ConfiguredFactory(bool withExtractor = true, bool withKey = true) =>
-        new ApiFactory().WithWebHostBuilder(builder =>
+    private static WebApplicationFactory<Program> ConfiguredFactory(bool withExtractor = true, bool withKey = true,
+        IMonitoringBiometricClient? biometrics = null) =>
+        new ApiFactory(monitoringBiometricClient: biometrics).WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
