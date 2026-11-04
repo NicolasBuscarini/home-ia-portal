@@ -60,7 +60,9 @@ public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext data
             var publicIds = allowedCameras.ToDictionary(camera => camera.CameraId, camera => camera.PublicId!,
                 StringComparer.Ordinal);
             var remoteItems = remote.Items.Select(item => MapRemote(item,
-                remoteJobs.GetValueOrDefault(item.PublicId) ?? "not_requested",
+                remoteJobs is null
+                    ? "unavailable"
+                    : remoteJobs.GetValueOrDefault(item.PublicId) ?? "not_requested",
                 publicIds.GetValueOrDefault(item.CameraId, item.CameraId),
                 remotePreservation.GetValueOrDefault(item.PublicId))).ToArray();
             return new ClipPage(remoteItems, remote.Page, remote.PageSize, remote.Total);
@@ -123,7 +125,9 @@ public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext data
             var remoteStates = await RemoteAnalysisStatesAsync([remote], cancellationToken);
             var remotePreservation = await PreservationStatesAsync([remote.PublicId], cancellationToken);
             var remoteItem = MapRemote(remote,
-                remoteStates.GetValueOrDefault(remote.PublicId) ?? "not_requested", remoteCamera.PublicId!,
+                remoteStates is null
+                    ? "unavailable"
+                    : remoteStates.GetValueOrDefault(remote.PublicId) ?? "not_requested", remoteCamera.PublicId!,
                 remotePreservation.GetValueOrDefault(remote.PublicId));
             return new ClipReadResult(new ClipDetails(remoteItem, remoteItem.SizeBytes is null
                     ? null
@@ -195,13 +199,22 @@ public sealed class ClipLibraryService(CaptureOptions capture, IamDbContext data
             .GetPreservationStatesAsync(clipPublicIds, cancellationToken);
     }
 
-    private async Task<Dictionary<string, string>> RemoteAnalysisStatesAsync(
+    // A indisponibilidade da análise é um estado degradado do módulo, não um erro da listagem:
+    // o clipe continua legível e recebe o estado "unavailable" até o serviço responder de novo.
+    private async Task<Dictionary<string, string>?> RemoteAnalysisStatesAsync(
         IReadOnlyCollection<MonitoringClipItem> clips, CancellationToken cancellationToken)
     {
         if (!RemoteAnalysis || remoteAnalysis is null) return new(StringComparer.Ordinal);
-        var jobs = await remoteAnalysis.LatestForClipsAsync(clips.Select(clip => clip.PublicId).ToArray(),
-            cancellationToken) ?? throw new MonitoringAnalysisUnavailableException();
-        return jobs.ToDictionary(job => job.ClipPublicId, job => job.State, StringComparer.Ordinal);
+        try
+        {
+            var jobs = await remoteAnalysis.LatestForClipsAsync(clips.Select(clip => clip.PublicId).ToArray(),
+                cancellationToken);
+            return jobs?.ToDictionary(job => job.ClipPublicId, job => job.State, StringComparer.Ordinal);
+        }
+        catch (MonitoringAnalysisUnavailableException)
+        {
+            return null;
+        }
     }
 
     private async Task<Dictionary<string, ClipAnalysisJob>> LatestJobsAsync(string[] clipIds,

@@ -88,15 +88,47 @@ public sealed class ClipLibraryRemoteApiTests
         Assert.Equal("completed", detailBody.GetProperty("clip").GetProperty("analysisStatus").GetString());
     }
 
+    [Fact]
+    public async Task Remote_analysis_outage_keeps_clip_listing_available()
+    {
+        var fake = new FakeClipsClient(null);
+        var analysis = new FakeAnalysisStatusClient { Unavailable = true };
+        await using var factory = new ApiFactory(monitoringClipsSource: "remote", monitoringClipsClient: fake,
+            monitoringAnalysisSource: "remote", monitoringAnalysisClient: analysis);
+        var internalCameraId = factory.Services.GetRequiredService<GarageWatch.Infrastructure.Capture.CaptureOptions>().CameraId;
+        var publicId = "CLP000000000009";
+        fake.Page = new MonitoringClipPage(
+        [
+            new MonitoringClipItem(publicId, "0123456789abcdef0123456789abcdef", internalCameraId,
+                DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, "ready", "not_requested", "motion", "1",
+                null, null, 0, DateTimeOffset.UtcNow, 1_048_576)
+        ], 1, 25, 1);
+        fake.PublicCameraId = await GetCameraPublicIdAsync(factory, internalCameraId);
+
+        using var admin = await LoginAsync(factory);
+        using var list = await admin.GetAsync("/api/v1/clips?page=1&pageSize=25");
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        var body = await list.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("unavailable", body.GetProperty("items")[0].GetProperty("analysisStatus").GetString());
+
+        using var detail = await admin.GetAsync($"/api/v1/clips/{publicId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("unavailable",
+            detailBody.GetProperty("clip").GetProperty("analysisStatus").GetString());
+    }
+
     private sealed class FakeAnalysisStatusClient : IMonitoringAnalysisClient
     {
         public IReadOnlyList<string> LastClipIds { get; private set; } = [];
         public IReadOnlyList<MonitoringAnalysisJobStatus> States { get; set; } = [];
+        public bool Unavailable { get; set; }
 
         public Task<IReadOnlyList<MonitoringAnalysisJobStatus>?> LatestForClipsAsync(
             IReadOnlyCollection<string> clipPublicIds, CancellationToken cancellationToken = default)
         {
             LastClipIds = clipPublicIds.ToArray();
+            if (Unavailable) throw new MonitoringAnalysisUnavailableException();
             return Task.FromResult<IReadOnlyList<MonitoringAnalysisJobStatus>?>(States
                 .Where(state => clipPublicIds.Contains(state.ClipPublicId)).ToArray());
         }
