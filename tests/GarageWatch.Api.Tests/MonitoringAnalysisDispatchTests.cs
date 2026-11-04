@@ -82,13 +82,6 @@ public sealed class MonitoringAnalysisDispatchTests
             Assert.Empty(await scope.ServiceProvider.GetRequiredService<IamDbContext>().ClipAnalysisJobs
                 .ToArrayAsync());
 
-        using (var scope = factory.Services.CreateScope())
-        {
-            var claimed = await scope.ServiceProvider.GetRequiredService<ClipAnalysisDispatchService>()
-                .ClaimNextAsync(CancellationToken.None);
-            Assert.NotNull(claimed);
-            Assert.Equal("processing", claimed.State);
-        }
     }
 
     [Fact]

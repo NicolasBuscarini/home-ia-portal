@@ -21,13 +21,12 @@ public sealed class ClipAnalysisCapacityException : Exception;
 
 public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitOfWork unitOfWork,
     IIamAuditEventRepository audit, AccessProfileService profiles, CaptureOptions capture,
-    ClipAnalysisDispatchOptions options, TimeProvider timeProvider, IPublicIdGenerator publicIds,
+    ClipAnalysisDispatchOptions options, TimeProvider timeProvider,
     IMonitoringAnalysisClient? remoteAnalysis = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     // A análise é sempre executada pelo serviço de Monitoramento (ADR108); o portal mantém
     // política, autorização, janela e auditoria.
-    private static bool RemoteAnalysis => true;
     private IMonitoringAnalysisClient RemoteClient => remoteAnalysis ??
         throw new MonitoringAnalysisUnavailableException();
 
@@ -44,17 +43,10 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
             new PermissionRequest("clips.analysis.request", scope.ContextId, scope.CameraId), cancellationToken);
         var canManage = await profiles.IsAllowedAsync(actorId,
             new PermissionRequest("clips.analysis.policy.manage", scope.ContextId, scope.CameraId), cancellationToken);
-        if (RemoteAnalysis)
-        {
-            var remote = await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken) ??
-                throw new MonitoringAnalysisUnavailableException();
-            return new(scope.CameraPublicId, scope.ContextPublicId, remote.Policy, remote.Version,
-                remote.UpdatedAtUtc, canRequest, canManage);
-        }
-        var policy = await database.ClipAnalysisDispatchPolicies.AsNoTracking().SingleOrDefaultAsync(
-            item => item.CameraId == scope.CameraId, cancellationToken);
-        return new(scope.CameraPublicId, scope.ContextPublicId, policy?.Policy ?? ClipAnalysisPolicies.ManualOnly,
-            policy?.Version ?? 0, policy?.UpdatedAtUtc, canRequest, canManage);
+        var remote = await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken) ??
+            throw new MonitoringAnalysisUnavailableException();
+        return new(scope.CameraPublicId, scope.ContextPublicId, remote.Policy, remote.Version,
+            remote.UpdatedAtUtc, canRequest, canManage);
     }
 
     public async Task<ClipAnalysisPolicyResult> UpdatePolicyAsync(Guid actorId, string cameraId, long expectedVersion,
@@ -68,59 +60,24 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         if (!await profiles.IsAllowedAsync(actorId, new PermissionRequest("clips.analysis.policy.manage", scope.ContextId,
                 scope.CameraId), cancellationToken)) throw new UnauthorizedAccessException();
 
-        if (RemoteAnalysis)
+        MonitoringAnalysisPolicy updated;
+        try
         {
-            MonitoringAnalysisPolicy updated;
-            try
-            {
-                updated = await RemoteClient.UpdatePolicyAsync(scope.CameraId, scope.ContextId, expectedVersion,
-                    policy, actorId.ToString("D"), cancellationToken) ??
-                    throw new MonitoringAnalysisUnavailableException();
-            }
-            catch (MonitoringAnalysisConflictException)
-            {
-                throw new ClipAnalysisConflictException("policy_version_conflict");
-            }
-            await unitOfWork.ExecuteAtomicallyAsync(token =>
-            {
-                Audit(actorId, "clip.analysis.policy.updated", cameraId);
-                return Task.CompletedTask;
-            }, cancellationToken);
-            return new ClipAnalysisPolicyResult(scope.CameraPublicId, scope.ContextPublicId, updated.Policy,
-                updated.Version, updated.UpdatedAtUtc);
+            updated = await RemoteClient.UpdatePolicyAsync(scope.CameraId, scope.ContextId, expectedVersion,
+                policy, actorId.ToString("D"), cancellationToken) ??
+                throw new MonitoringAnalysisUnavailableException();
         }
-        return await unitOfWork.ExecuteAtomicallyAsync(async token =>
+        catch (MonitoringAnalysisConflictException)
         {
-            var current = await database.ClipAnalysisDispatchPolicies.SingleOrDefaultAsync(item =>
-                item.CameraId == scope.CameraId, token);
-            var currentVersion = current?.Version ?? 0;
-            if (currentVersion != expectedVersion) throw new ClipAnalysisConflictException("policy_version_conflict");
-            var now = timeProvider.GetUtcNow();
-            if (current is null)
-            {
-                current = new ClipAnalysisDispatchPolicy
-                {
-                    CameraId = scope.CameraId,
-                    ContextId = scope.ContextId,
-                    Policy = policy,
-                    Version = 1,
-                    UpdatedByUserId = actorId.ToString("D"),
-                    CreatedAtUtc = now,
-                    UpdatedAtUtc = now
-                };
-                database.ClipAnalysisDispatchPolicies.Add(current);
-            }
-            else
-            {
-                current.Policy = policy;
-                current.Version = checked(current.Version + 1);
-                current.UpdatedByUserId = actorId.ToString("D");
-                current.UpdatedAtUtc = now;
-            }
-            audit.Append(actorId, actorId, "clip.analysis.policy.updated", cameraId, now);
-            return new ClipAnalysisPolicyResult(scope.CameraPublicId, scope.ContextPublicId, current.Policy, current.Version,
-                current.UpdatedAtUtc);
+            throw new ClipAnalysisConflictException("policy_version_conflict");
+        }
+        await unitOfWork.ExecuteAtomicallyAsync(token =>
+        {
+            Audit(actorId, "clip.analysis.policy.updated", cameraId);
+            return Task.CompletedTask;
         }, cancellationToken);
+        return new ClipAnalysisPolicyResult(scope.CameraPublicId, scope.ContextPublicId, updated.Policy,
+            updated.Version, updated.UpdatedAtUtc);
     }
 
     public async Task<ClipAnalysisJobResult> RequestAsync(Guid actorId, string clipId, Guid idempotencyKey,
@@ -134,55 +91,30 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         if (!await profiles.IsAllowedAsync(actorId, new PermissionRequest("clips.analysis.request", scope.ContextId,
                 scope.CameraId), cancellationToken))
         {
-            await unitOfWork.ExecuteAtomicallyAsync(token =>
-            {
-                Audit(actorId, "clip.analysis.request.denied", clip.ClipId);
-                return Task.CompletedTask;
-            }, cancellationToken);
+            await AuditDeniedAsync(actorId, clip.ClipId, cancellationToken);
             throw new UnauthorizedAccessException();
         }
         var analysisVersion = requestedAnalysisVersion ?? options.DefaultAnalysisVersion;
-        if (RemoteAnalysis)
-        {
-            try
-            {
-                var job = await RemoteClient.EnqueueAsync(new MonitoringAnalysisEnqueue(clip.ClipId, clip.PublicId!,
-                        scope.CameraId, scope.ContextId, idempotencyKey, analysisVersion, "manual"),
-                    cancellationToken) ?? throw new MonitoringAnalysisUnavailableException();
-                return new ClipAnalysisJobResult(job.PublicId, job.ClipPublicId, job.AnalysisVersion, job.State,
-                    job.Existing);
-            }
-            catch (MonitoringAnalysisConflictException exception)
-            {
-                throw new ClipAnalysisConflictException(exception.Message);
-            }
-            catch (MonitoringAnalysisCapacityException)
-            {
-                throw new ClipAnalysisCapacityException();
-            }
-            catch (MonitoringAnalysisDeniedException exception)
-            {
-                await unitOfWork.ExecuteAtomicallyAsync(token =>
-                {
-                    Audit(actorId, "clip.analysis.request.denied", clip.ClipId);
-                    return Task.CompletedTask;
-                }, cancellationToken);
-                throw new ClipAnalysisDeniedException(exception.Message);
-            }
-        }
         try
         {
-            return await EnqueueAsync(clip, scope, idempotencyKey, analysisVersion,
-                "manual", actorId, false, cancellationToken);
+            var job = await RemoteClient.EnqueueAsync(new MonitoringAnalysisEnqueue(clip.ClipId, clip.PublicId!,
+                    scope.CameraId, scope.ContextId, idempotencyKey, analysisVersion, "manual"),
+                cancellationToken) ?? throw new MonitoringAnalysisUnavailableException();
+            return new ClipAnalysisJobResult(job.PublicId, job.ClipPublicId, job.AnalysisVersion, job.State,
+                job.Existing);
         }
-        catch (ClipAnalysisDeniedException)
+        catch (MonitoringAnalysisConflictException exception)
         {
-            await unitOfWork.ExecuteAtomicallyAsync(token =>
-            {
-                Audit(actorId, "clip.analysis.request.denied", clip.ClipId);
-                return Task.CompletedTask;
-            }, cancellationToken);
-            throw;
+            throw new ClipAnalysisConflictException(exception.Message);
+        }
+        catch (MonitoringAnalysisCapacityException)
+        {
+            throw new ClipAnalysisCapacityException();
+        }
+        catch (MonitoringAnalysisDeniedException exception)
+        {
+            await AuditDeniedAsync(actorId, clip.ClipId, cancellationToken);
+            throw new ClipAnalysisDeniedException(exception.Message);
         }
     }
 
@@ -191,23 +123,14 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         if (clip.State != "ready" || !await IsMediaIntactAsync(clip, cancellationToken)) return;
         var scope = await FindEnabledCameraAsync(clip.CameraId, cancellationToken);
         if (scope is null) return;
-        string? effectivePolicy;
-        if (RemoteAnalysis)
-            effectivePolicy = (await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken))?.Policy;
-        else
-            effectivePolicy = (await database.ClipAnalysisDispatchPolicies.AsNoTracking()
-                .SingleOrDefaultAsync(item => item.CameraId == scope.CameraId, cancellationToken))?.Policy;
+        var effectivePolicy = (await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken))?.Policy;
         if (effectivePolicy is null or ClipAnalysisPolicies.ManualOnly or ClipAnalysisPolicies.Never) return;
         if (effectivePolicy == ClipAnalysisPolicies.LargeMotion && !HasVersionedLargeMotionEvidence(clip)) return;
         try
         {
-            if (RemoteAnalysis)
-                await RemoteClient.EnqueueAsync(new MonitoringAnalysisEnqueue(clip.ClipId, clip.PublicId!,
-                    scope.CameraId, scope.ContextId, DeterministicKey(clip.ClipId, options.DefaultAnalysisVersion),
-                    options.DefaultAnalysisVersion, "automatic"), cancellationToken);
-            else
-                await EnqueueAsync(clip, scope, DeterministicKey(clip.ClipId, options.DefaultAnalysisVersion),
-                    options.DefaultAnalysisVersion, "automatic", null, true, cancellationToken);
+            await RemoteClient.EnqueueAsync(new MonitoringAnalysisEnqueue(clip.ClipId, clip.PublicId!,
+                scope.CameraId, scope.ContextId, DeterministicKey(clip.ClipId, options.DefaultAnalysisVersion),
+                options.DefaultAnalysisVersion, "automatic"), cancellationToken);
         }
         catch (Exception exception) when (exception is ClipAnalysisCapacityException or ClipAnalysisDeniedException
             or MonitoringAnalysisCapacityException or MonitoringAnalysisDeniedException
@@ -217,89 +140,11 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         }
     }
 
-    public async Task<ClipAnalysisJobResult?> ClaimNextAsync(CancellationToken cancellationToken)
-    {
-        if (RemoteAnalysis)
+    private async Task AuditDeniedAsync(Guid actorId, string clipId, CancellationToken cancellationToken) =>
+        await unitOfWork.ExecuteAtomicallyAsync(token =>
         {
-            var remote = await RemoteClient.ClaimAsync(cancellationToken);
-            return remote is null ? null : new ClipAnalysisJobResult(remote.PublicId, remote.ClipPublicId,
-                remote.AnalysisVersion, remote.State, remote.Existing);
-        }
-        return await unitOfWork.ExecuteAtomicallyAsync(async token =>
-        {
-            var now = timeProvider.GetUtcNow();
-            await ReconcileExpiredLeasesAsync(now, token);
-            var job = database.ClipAnalysisJobs.Local.FirstOrDefault(item => item.State == "analysis_pending") ??
-                await database.ClipAnalysisJobs.OrderBy(item => item.CreatedAtUtc)
-                    .FirstOrDefaultAsync(item => item.State == "analysis_pending", token);
-            if (job is null) return null;
-            job.State = "processing";
-            job.LeaseId = Guid.NewGuid();
-            job.LeaseExpiresAtUtc = now.AddSeconds(options.LeaseSeconds);
-            job.AttemptCount = checked(job.AttemptCount + 1);
-            job.UpdatedAtUtc = now;
-            var clip = await ReadReadyClipByInternalIdAsync(job.ClipId, token);
-            return clip is null ? null : Map(job, false, clip.PublicId!);
-        }, cancellationToken);
-    }
-
-    private async Task<ClipAnalysisJobResult> EnqueueAsync(ClipManifestV1 clip, CameraScope scope, Guid key,
-        string analysisVersion, string requestKind, Guid? actorId, bool automatic, CancellationToken cancellationToken) =>
-        await unitOfWork.ExecuteAtomicallyAsync(async token =>
-        {
-            await ReconcileExpiredLeasesAsync(timeProvider.GetUtcNow(), token);
-            var policy = await database.ClipAnalysisDispatchPolicies.SingleOrDefaultAsync(item =>
-                item.CameraId == scope.CameraId, token);
-            var effectivePolicy = policy?.Policy ?? ClipAnalysisPolicies.ManualOnly;
-            if (effectivePolicy == ClipAnalysisPolicies.Never)
-            {
-                throw new ClipAnalysisDeniedException("analysis_not_allowed");
-            }
-            if (automatic && effectivePolicy == ClipAnalysisPolicies.ManualOnly) return null!;
-            if (automatic && effectivePolicy == ClipAnalysisPolicies.LargeMotion && !HasVersionedLargeMotionEvidence(clip))
-                return null!;
-
-            var byKey = await database.ClipAnalysisJobs.SingleOrDefaultAsync(job =>
-                job.ClipId == clip.ClipId && job.IdempotencyKey == key, token);
-            if (byKey is not null)
-            {
-                if (!string.Equals(byKey.AnalysisVersion, analysisVersion, StringComparison.Ordinal))
-                    throw new ClipAnalysisConflictException("idempotency_conflict");
-                Audit(actorId, "clip.analysis.request.idempotent", clip.ClipId);
-                return Map(byKey, true, clip.PublicId!);
-            }
-            var existing = await database.ClipAnalysisJobs.SingleOrDefaultAsync(job =>
-                job.ClipId == clip.ClipId && job.AnalysisVersion == analysisVersion, token);
-            if (existing is not null)
-            {
-                Audit(actorId, "clip.analysis.request.deduplicated", clip.ClipId);
-                return Map(existing, true, clip.PublicId!);
-            }
-            var queued = await database.ClipAnalysisJobs.CountAsync(job => job.State == "analysis_pending" ||
-                job.State == "processing", token);
-            if (queued >= options.QueueCapacity)
-            {
-                Audit(actorId, "clip.analysis.request.capacity", clip.ClipId);
-                throw new ClipAnalysisCapacityException();
-            }
-            var now = timeProvider.GetUtcNow();
-            var job = new ClipAnalysisJob
-            {
-                Id = Guid.NewGuid(),
-                PublicId = publicIds.Generate(PublicIdPrefixes.ClipAnalysisJobPrefix),
-                ClipId = clip.ClipId,
-                ContextId = scope.ContextId,
-                CameraId = scope.CameraId,
-                IdempotencyKey = key,
-                AnalysisVersion = analysisVersion,
-                PolicyVersion = policy?.Version ?? 0,
-                RequestKind = requestKind,
-                CreatedAtUtc = now,
-                UpdatedAtUtc = now
-            };
-            database.ClipAnalysisJobs.Add(job);
-            Audit(actorId, automatic ? "clip.analysis.auto.requested" : "clip.analysis.requested", clip.ClipId);
-            return Map(job, false, clip.PublicId!);
+            Audit(actorId, "clip.analysis.request.denied", clipId);
+            return Task.CompletedTask;
         }, cancellationToken);
 
     private async Task<CameraScope?> FindEnabledCameraAsync(string cameraId, CancellationToken cancellationToken) =>
@@ -324,14 +169,6 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
             if (candidate?.PublicId == publicId) return candidate;
         }
         return null;
-    }
-
-    private async Task<ClipManifestV1?> ReadReadyClipByInternalIdAsync(string internalId,
-        CancellationToken cancellationToken)
-    {
-        if (!LocalSegmentSpool.IsSafeSegmentId(internalId)) return null;
-        return await ReadReadyClipByPathAsync(Path.Combine(capture.SpoolDirectory, "clips", "manifests",
-            internalId + ".json"), cancellationToken);
     }
 
     private async Task<ClipManifestV1?> ReadReadyClipByPathAsync(string path, CancellationToken cancellationToken)
@@ -366,19 +203,5 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         new(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{clipId}:{analysisVersion}"))[..16]);
     private void Audit(Guid? actorId, string action, string clipId) => audit.Append(actorId, actorId, action, clipId,
         timeProvider.GetUtcNow());
-    private async Task ReconcileExpiredLeasesAsync(DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        var expired = await database.ClipAnalysisJobs.Where(job => job.State == "processing" &&
-            job.LeaseExpiresAtUtc != null && job.LeaseExpiresAtUtc < now).ToArrayAsync(cancellationToken);
-        foreach (var job in expired)
-        {
-            job.State = "analysis_pending";
-            job.LeaseId = null;
-            job.LeaseExpiresAtUtc = null;
-            job.UpdatedAtUtc = now;
-        }
-    }
-    private static ClipAnalysisJobResult Map(ClipAnalysisJob job, bool existing, string clipPublicId) => new(job.PublicId!, clipPublicId,
-        job.AnalysisVersion, job.State, existing);
     private sealed record CameraScope(string ContextId, string CameraId, string CameraPublicId, string ContextPublicId);
 }
