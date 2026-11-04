@@ -14,7 +14,7 @@ public sealed record BiometricPersonLinkSummary(string EnrollmentPublicId, strin
 public sealed class BiometricPersonLinkService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository audit,
+    IPlatformEventRepository audit,
     TimeProvider timeProvider,
     IKnownPeopleGateway people,
     IBiometricEnrollmentGateway enrollments)

@@ -9,7 +9,7 @@ namespace GarageWatch.Infrastructure.Identity;
 public sealed class PortalService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents,
+    IPlatformEventRepository auditEvents,
     UserManager<ApplicationUser> users,
     AccessProfileService profiles,
     IPermissionEvaluator evaluator,

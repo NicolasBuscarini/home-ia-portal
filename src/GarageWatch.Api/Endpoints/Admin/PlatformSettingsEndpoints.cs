@@ -41,7 +41,7 @@ public sealed class UpdatePlatformSettingsEndpoint()
                     IConfiguration configuration,
                     UserManager<ApplicationUser> users,
                     IIamUnitOfWork unitOfWork,
-                    IIamAuditEventRepository audit,
+                    IPlatformEventRepository audit,
                     TimeProvider timeProvider) =>
                 {
                     if (!EndpointSecurity.IsSameOrigin(context))

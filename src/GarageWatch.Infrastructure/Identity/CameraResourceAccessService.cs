@@ -9,7 +9,7 @@ namespace GarageWatch.Infrastructure.Identity;
 public sealed class CameraResourceAccessService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents,
+    IPlatformEventRepository auditEvents,
     AccessProfileService profiles,
     TimeProvider timeProvider) : ICameraResourceAccess
 {

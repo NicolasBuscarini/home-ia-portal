@@ -14,7 +14,7 @@ public sealed record AccessProfileAssignmentSummary(string AssignmentPublicId, s
 public sealed class AccessProfileService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository audit,
+    IPlatformEventRepository audit,
     UserManager<ApplicationUser> users,
     IPermissionEvaluator evaluator,
     IPublicIdGenerator publicIds,

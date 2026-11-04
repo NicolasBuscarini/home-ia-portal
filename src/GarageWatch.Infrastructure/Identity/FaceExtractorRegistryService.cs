@@ -25,7 +25,7 @@ public sealed record FaceExtractorSelectionResult(long Version, FaceExtractorCan
 public sealed class FaceExtractorConflictException(string code) : Exception(code);
 
 public sealed class FaceExtractorRegistryService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents, TimeProvider timeProvider, Biometrics.FaceExtractorRuntime runtime)
+    IPlatformEventRepository auditEvents, TimeProvider timeProvider, Biometrics.FaceExtractorRuntime runtime)
 {
     public const string RegistryKey = "face-extractor";
     public const string AdapterContract = "face-embedding.v1";

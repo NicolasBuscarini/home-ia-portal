@@ -20,7 +20,7 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
     public DbSet<CameraAccessGrant> CameraAccessGrants => Set<CameraAccessGrant>();
     public DbSet<CameraContext> CameraContexts => Set<CameraContext>();
     public DbSet<CameraCatalogEntry> CameraCatalog => Set<CameraCatalogEntry>();
-    public DbSet<IamAuditEvent> IamAuditEvents => Set<IamAuditEvent>();
+    public DbSet<PlatformEvent> PlatformEvents => Set<PlatformEvent>();
     public DbSet<AccessProfile> AccessProfiles => Set<AccessProfile>();
     public DbSet<AccessProfileVersion> AccessProfileVersions => Set<AccessProfileVersion>();
     public DbSet<AccessProfilePermission> AccessProfilePermissions => Set<AccessProfilePermission>();
@@ -91,13 +91,47 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
 
         ConfigurePublicId<ApplicationUser>(builder, PublicIdPrefixes.UserPrefix);
 
-        builder.Entity<IamAuditEvent>(entity =>
+        builder.Entity<PlatformEvent>(entity =>
         {
+            entity.ToTable("PlatformEvents");
             entity.HasKey(audit => audit.Id);
-            entity.Property(audit => audit.Action).HasMaxLength(64).IsRequired();
+            entity.Property(audit => audit.PublicId).HasMaxLength(16);
+            entity.Property(audit => audit.SchemaVersion).HasMaxLength(16);
+            entity.Property(audit => audit.EventType).HasMaxLength(64).IsRequired();
+            entity.Property(audit => audit.Category).HasMaxLength(32);
+            entity.Property(audit => audit.Severity).HasMaxLength(16);
+            entity.Property(audit => audit.Outcome).HasMaxLength(16);
+            entity.Property(audit => audit.Source).HasMaxLength(32);
+            entity.Property(audit => audit.SourceVersion).HasMaxLength(64);
+            entity.Property(audit => audit.Emitter).HasMaxLength(16);
+            entity.Property(audit => audit.ResourceType).HasMaxLength(40);
             entity.Property(audit => audit.ResourceId).HasMaxLength(64);
+            entity.Property(audit => audit.CorrelationId).HasMaxLength(128);
+            entity.Property(audit => audit.CausationId).HasMaxLength(16);
+            entity.Property(audit => audit.RequestId).HasMaxLength(128);
+            entity.Property(audit => audit.SessionId).HasMaxLength(128);
+            entity.Property(audit => audit.TraceId).HasMaxLength(32);
+            entity.Property(audit => audit.SpanId).HasMaxLength(16);
+            entity.Property(audit => audit.HttpMethod).HasMaxLength(8);
+            entity.Property(audit => audit.HttpRoute).HasMaxLength(256);
+            entity.Property(audit => audit.ClientUserAgent).HasMaxLength(512);
+            entity.Property(audit => audit.ClientBrowser).HasMaxLength(64);
+            entity.Property(audit => audit.ClientOs).HasMaxLength(64);
+            entity.Property(audit => audit.ClientDevice).HasMaxLength(64);
+            entity.Property(audit => audit.ClientIp).HasMaxLength(64);
+            entity.Property(audit => audit.MetadataJson);
+            entity.Property(audit => audit.PayloadHash).HasMaxLength(64);
             entity.Property(audit => audit.OccurredAtUtc).HasConversion(UtcTicksConverter);
+            entity.Property(audit => audit.RecordedAtUtc).HasConversion(NullableUtcTicksConverter);
             entity.HasIndex(audit => new { audit.SubjectUserId, audit.OccurredAtUtc });
+            entity.HasIndex(audit => new { audit.OccurredAtUtc, audit.Id });
+            entity.HasIndex(audit => new { audit.ActorUserId, audit.OccurredAtUtc });
+            entity.HasIndex(audit => new { audit.EventType, audit.OccurredAtUtc });
+            entity.HasIndex(audit => audit.CorrelationId);
+            entity.HasIndex(audit => new { audit.ResourceType, audit.ResourceId });
+            entity.HasIndex(audit => new { audit.Outcome, audit.OccurredAtUtc });
+            entity.HasIndex(audit => new { audit.Source, audit.EventId }).IsUnique();
+            entity.HasIndex(audit => audit.PublicId).IsUnique();
             entity.HasOne(audit => audit.Actor)
                 .WithMany()
                 .HasForeignKey(audit => audit.ActorUserId)

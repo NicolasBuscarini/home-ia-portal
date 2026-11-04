@@ -29,7 +29,7 @@ public sealed class BiometricEnrollmentRejectedException(string code) : Exceptio
 }
 
 public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository audit, AccessProfileService profiles, IBiometricDataProtector protector,
+    IPlatformEventRepository audit, AccessProfileService profiles, IBiometricDataProtector protector,
     IEnumerable<IFaceEnrollmentExtractor> extractors, TimeProvider timeProvider, IPublicIdGenerator publicIds,
     ILogger<BiometricEnrollmentService> logger, IBiometricPersonLinkStore links)
 {

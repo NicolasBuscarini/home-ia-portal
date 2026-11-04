@@ -47,7 +47,7 @@ public sealed class LocalBiometricEnrollmentGateway(BiometricEnrollmentService s
 /// </summary>
 public sealed class RemoteBiometricEnrollmentGateway(IamDbContext database, AccessProfileService profiles,
     IBiometricDataProtector protector, IEnumerable<IFaceEnrollmentExtractor> extractors,
-    IMonitoringBiometricClient client, IIamUnitOfWork unitOfWork, IIamAuditEventRepository audit,
+    IMonitoringBiometricClient client, IIamUnitOfWork unitOfWork, IPlatformEventRepository audit,
     TimeProvider timeProvider, ILogger<RemoteBiometricEnrollmentGateway> logger,
     IBiometricPersonLinkStore links) : IBiometricEnrollmentGateway
 {

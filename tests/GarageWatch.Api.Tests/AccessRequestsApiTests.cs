@@ -87,10 +87,10 @@ public sealed class AccessRequestsApiTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.Equal(0, await database.CameraAccessGrants.CountAsync(grant => grant.UserId == userId));
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(item => item.SubjectUserId == userId &&
-            item.Action == "access.request.created"));
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(item => item.SubjectUserId == userId &&
-            item.Action == "access.request.reviewed"));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(item => item.SubjectUserId == userId &&
+            item.EventType == "access.request.created"));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(item => item.SubjectUserId == userId &&
+            item.EventType == "access.request.reviewed"));
     }
 
     [Fact]

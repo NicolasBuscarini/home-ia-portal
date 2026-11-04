@@ -17,7 +17,7 @@ public sealed class GetActivityWatchSummaryEndpoint() : BaseEndpoint("Portal", "
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/portal/modules/activitywatch/summary", async (ClaimsPrincipal principal,
             UserManager<ApplicationUser> users, AccessProfileService profiles, IPermissionEvaluator evaluator,
-            IActivityWatchModule activityWatch, IamDbContext database, IIamAuditEventRepository auditEvents,
+            IActivityWatchModule activityWatch, IamDbContext database, IPlatformEventRepository auditEvents,
             TimeProvider timeProvider, CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);

@@ -92,8 +92,8 @@ public sealed class IntegrationCredentialTests
         Assert.False(stored.Ciphertext.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(Secret)));
         var administratorId = await GetUserIdAsync(factory, "contract-user");
         Assert.Equal(administratorId, stored.UpdatedByUserId);
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(entry =>
-            entry.Action == "integration_credential.updated" && entry.ActorUserId == administratorId));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(entry =>
+            entry.EventType == "integration_credential.updated" && entry.ActorUserId == administratorId));
 
         using var status = await admin.GetAsync(ActivityWatchPath);
         Assert.Equal(HttpStatusCode.OK, status.StatusCode);
@@ -117,8 +117,8 @@ public sealed class IntegrationCredentialTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.Equal(0, await database.IntegrationCredentials.CountAsync());
-        Assert.Equal(0, await database.IamAuditEvents.CountAsync(entry =>
-            entry.Action.StartsWith("integration_credential")));
+        Assert.Equal(0, await database.PlatformEvents.CountAsync(entry =>
+            entry.EventType.StartsWith("integration_credential")));
     }
 
     [Fact]
@@ -154,8 +154,8 @@ public sealed class IntegrationCredentialTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.Equal(0, await database.IntegrationCredentials.CountAsync());
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(entry =>
-            entry.Action == "integration_credential.removed" && entry.ActorUserId == administratorId));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(entry =>
+            entry.EventType == "integration_credential.removed" && entry.ActorUserId == administratorId));
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public sealed class IntegrationCredentialTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IIamUnitOfWork>();
-        var auditEvents = scope.ServiceProvider.GetRequiredService<IIamAuditEventRepository>();
+        var auditEvents = scope.ServiceProvider.GetRequiredService<IPlatformEventRepository>();
 
         var first = new AesGcmIntegrationCredentialProtector(Configuration("v1", "first-key-material", null, null),
             NullLogger<AesGcmIntegrationCredentialProtector>.Instance);
@@ -187,8 +187,8 @@ public sealed class IntegrationCredentialTests
         Assert.Equal("v2", resolved.KeyVersion);
         var stored = await database.IntegrationCredentials.AsNoTracking().SingleAsync();
         Assert.Equal("v2", stored.KeyVersion);
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(entry =>
-            entry.Action == "integration_credential.rotated"));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(entry =>
+            entry.EventType == "integration_credential.rotated"));
         Assert.Null(first.TryOpen(stored.Ciphertext, stored.Nonce, stored.Tag, "v2",
             IntegrationCredentialIds.ActivityWatch));
     }

@@ -13,7 +13,7 @@ public sealed record AccessRequestResult(string PublicId, string Purpose, string
 public sealed class AccessRequestConflictException(string message) : Exception(message);
 
 public sealed class AccessRequestService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds)
+    IPlatformEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds)
 {
     public Task<AccessRequestResult> CreateAsync(Guid userId, Guid idempotencyKey, string purpose,
         CancellationToken cancellationToken) => unitOfWork.ExecuteAtomicallyAsync(async token =>

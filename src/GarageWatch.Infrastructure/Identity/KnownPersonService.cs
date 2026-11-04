@@ -10,7 +10,7 @@ public sealed record KnownPersonPage(IReadOnlyList<KnownPersonSummary> Items, in
 public sealed record KnownPersonResult(string PublicId, string DisplayName, string Purpose,
     DateTimeOffset AuthorizationRecordedAtUtc, DateTimeOffset CreatedAtUtc, long Version);
 public sealed class KnownPersonService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds,
+    IPlatformEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds,
     IBiometricPersonLinkStore links) : IKnownPeopleGateway
 {
     public async Task<KnownPersonResult> CreateAsync(Guid actorId, string? displayName, string? purpose,

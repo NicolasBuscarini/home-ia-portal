@@ -47,7 +47,7 @@ public sealed class UpdateCameraConnectionEndpoint() : BaseEndpoint("Camera admi
         routes.MapPut("/api/v1/admin/cameras/{cameraId}/connection", async (string cameraId,
             UpdateCameraAddressRequest request, HttpContext context, ClaimsPrincipal principal,
             UserManager<ApplicationUser> users, CaptureOptions capture, IamDbContext database,
-            ICameraConnectionManager manager, IIamUnitOfWork unitOfWork, IIamAuditEventRepository audit,
+            ICameraConnectionManager manager, IIamUnitOfWork unitOfWork, IPlatformEventRepository audit,
             TimeProvider timeProvider, CancellationToken cancellationToken) =>
         {
             if (!EndpointSecurity.IsSameOrigin(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);

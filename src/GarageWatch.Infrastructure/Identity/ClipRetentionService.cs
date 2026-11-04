@@ -86,12 +86,12 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
                 current.UpdatedByUserId = actorId.ToString("D");
                 current.UpdatedAtUtc = now;
             }
-            database.IamAuditEvents.Add(new IamAuditEvent
+            database.PlatformEvents.Add(new PlatformEvent
             {
                 Id = Guid.NewGuid(),
                 ActorUserId = actorId,
                 SubjectUserId = actorId,
-                Action = "clip.retention.policy.updated",
+                EventType = "clip.retention.policy.updated",
                 ResourceId = publicCameraId,
                 OccurredAtUtc = now
             });
@@ -142,12 +142,12 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
                 current.UpdatedByUserId = actorId.ToString("D");
                 current.UpdatedAtUtc = now;
             }
-            database.IamAuditEvents.Add(new IamAuditEvent
+            database.PlatformEvents.Add(new PlatformEvent
             {
                 Id = Guid.NewGuid(),
                 ActorUserId = actorId,
                 SubjectUserId = actorId,
-                Action = isPreserved ? "clip.preservation.enabled" : "clip.preservation.disabled",
+                EventType = isPreserved ? "clip.preservation.enabled" : "clip.preservation.disabled",
                 ResourceId = publicClipId,
                 OccurredAtUtc = now
             });
@@ -182,10 +182,10 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
     {
         await unitOfWork.ExecuteAtomicallyAsync(token =>
         {
-            database.IamAuditEvents.Add(new IamAuditEvent
+            database.PlatformEvents.Add(new PlatformEvent
             {
                 Id = Guid.NewGuid(),
-                Action = "clip.retention.expired",
+                EventType = "clip.retention.expired",
                 ResourceId = publicClipId,
                 OccurredAtUtc = timeProvider.GetUtcNow()
             });

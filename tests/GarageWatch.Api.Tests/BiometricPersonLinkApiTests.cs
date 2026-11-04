@@ -65,8 +65,8 @@ public sealed class BiometricPersonLinkApiTests
                 .Where(link => link.EnrollmentPublicId == enrollmentId).ToArrayAsync();
             Assert.Equal(2, rows.Length);
             Assert.Equal(secondPerson, Assert.Single(rows, row => row.UnlinkedAtUtc == null).KnownPersonPublicId);
-            var actions = await database.IamAuditEvents
-                .Where(entry => entry.ResourceId == enrollmentId).Select(entry => entry.Action).ToArrayAsync();
+            var actions = await database.PlatformEvents
+                .Where(entry => entry.ResourceId == enrollmentId).Select(entry => entry.EventType).ToArrayAsync();
             Assert.Contains("biometric.person_linked", actions);
             Assert.Contains("biometric.person_unlinked", actions);
         }

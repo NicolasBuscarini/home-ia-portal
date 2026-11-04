@@ -119,7 +119,9 @@ public static class DependencyInjection
         services.AddSingleton<IamTransactionGate>();
         services.AddScoped<IIamUnitOfWork, IamUnitOfWork>();
         services.AddScoped<ICameraAccessGrantRepository, CameraAccessGrantRepository>();
-        services.AddScoped<IIamAuditEventRepository, IamAuditEventRepository>();
+        services.AddScoped<IPlatformEventRepository, PlatformEventRepository>();
+        services.AddScoped<PlatformEventBackfillService>();
+        services.AddScoped<PlatformEventRetentionService>();
         services.AddScoped(provider => IdentityBootstrapOptions.FromConfiguration(
             provider.GetRequiredService<IConfiguration>()));
         var captureOptions = CaptureOptions.FromEnvironment(configuration);
@@ -131,6 +133,7 @@ public static class DependencyInjection
         var clipPlaybackOptions = ClipPlaybackOptions.FromEnvironment(configuration, captureOptions);
         var faceExtractorOptions = FaceExtractorOptions.FromEnvironment(configuration);
         var portalOptions = PortalOptions.FromConfiguration(configuration);
+        var platformEventRetentionOptions = PlatformEventRetentionOptions.FromConfiguration(configuration);
         services.AddSingleton(provider =>
         {
             var token = MonitoringServiceTokenOptions.FromConfiguration(
@@ -178,6 +181,7 @@ public static class DependencyInjection
         services.AddScoped<IActivityWatchModule, ActivityWatchClient>();
         services.AddSingleton(captureOptions);
         services.AddSingleton(portalOptions);
+        services.AddSingleton(platformEventRetentionOptions);
         services.AddSingleton(triggerOptions);
         services.AddSingleton(clipAnalysisOptions);
         services.AddSingleton(detectorOptions);
@@ -200,6 +204,7 @@ public static class DependencyInjection
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ClipTriggerWorker>());
         services.AddSingleton<SpoolWatcherWorker>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<SpoolWatcherWorker>());
+        services.AddSingleton<IHostedService, PlatformEventRetentionWorker>();
         return services;
     }
 }

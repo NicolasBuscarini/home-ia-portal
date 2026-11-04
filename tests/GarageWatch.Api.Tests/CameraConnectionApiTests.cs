@@ -58,8 +58,8 @@ public sealed class CameraConnectionApiTests
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
         Assert.Equal("camera-garage.lan", bridge.Address);
         using var auditScope = factory.Services.CreateScope();
-        Assert.Equal(1, await auditScope.ServiceProvider.GetRequiredService<IamDbContext>().IamAuditEvents
-            .CountAsync(entry => entry.Action == "camera.connection.address.updated"));
+        Assert.Equal(1, await auditScope.ServiceProvider.GetRequiredService<IamDbContext>().PlatformEvents
+            .CountAsync(entry => entry.EventType == "camera.connection.address.updated"));
     }
 
     private sealed class TestCameraConnectionManager(string address) : ICameraConnectionManager

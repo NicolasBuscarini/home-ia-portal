@@ -27,8 +27,8 @@ public sealed class IamTests
         Assert.True(await users.IsInRoleAsync(administrator, "Administrator"));
         Assert.False(await users.IsInRoleAsync(administrator, "Viewer"));
         Assert.Equal(0, await database.CameraAccessGrants.CountAsync());
-        var audit = await database.IamAuditEvents.SingleAsync();
-        Assert.Equal("administrator.bootstrapped", audit.Action);
+        var audit = await database.PlatformEvents.SingleAsync();
+        Assert.Equal("administrator.bootstrapped", audit.EventType);
         Assert.Null(audit.ResourceId);
 
         if (OperatingSystem.IsLinux())
@@ -75,9 +75,9 @@ public sealed class IamTests
             var administrator = await users.FindByIdAsync(administratorId.ToString());
             Assert.NotNull(administrator);
             Assert.Equal("contract-user", administrator.UserName);
-            Assert.Equal(2, await database.IamAuditEvents.CountAsync());
+            Assert.Equal(2, await database.PlatformEvents.CountAsync());
             Assert.Equal(cameraId, (await database.CameraAccessGrants.SingleAsync()).CameraId);
-            Assert.Equal(2, await database.IamAuditEvents.OrderBy(entry => entry.OccurredAtUtc).CountAsync());
+            Assert.Equal(2, await database.PlatformEvents.OrderBy(entry => entry.OccurredAtUtc).CountAsync());
             Assert.Equal(System.Net.HttpStatusCode.NoContent, (await restartedClient.PostAsJsonAsync("/api/v1/auth/login",
                 new { username = "contract-user", password = "Contract-Password-123!" })).StatusCode);
         }
@@ -116,9 +116,9 @@ public sealed class IamTests
         await administration.RevokeCameraAsync(administrator.Id, viewer.Id, cameraId);
         var grant = await database.CameraAccessGrants.SingleAsync();
         Assert.NotNull(grant.RevokedAtUtc);
-        Assert.Contains(await database.IamAuditEvents.Select(entry => entry.Action).ToListAsync(),
+        Assert.Contains(await database.PlatformEvents.Select(entry => entry.EventType).ToListAsync(),
             action => action == "camera.access.granted");
-        Assert.Contains(await database.IamAuditEvents.Select(entry => entry.Action).ToListAsync(),
+        Assert.Contains(await database.PlatformEvents.Select(entry => entry.EventType).ToListAsync(),
             action => action == "camera.access.revoked");
     }
 
@@ -309,12 +309,12 @@ public sealed class IamTests
         Assert.Single(page.Items);
         Assert.Equal(1, page.TotalCount);
 
-        var auditRepository = scope.ServiceProvider.GetRequiredService<IIamAuditEventRepository>();
+        var auditRepository = scope.ServiceProvider.GetRequiredService<IPlatformEventRepository>();
         var detailedAudit = Assert.Single(await auditRepository.GetAllAsync(withDetails: true),
-            entry => entry.Action == "camera.access.granted");
+            entry => entry.EventType == "camera.access.granted");
         Assert.Equal("contract-user", detailedAudit.Actor?.UserName);
         Assert.Equal("repository-viewer", detailedAudit.Subject?.UserName);
-        Assert.Single(await auditRepository.GetAllAsync(), entry => entry.Action == "administrator.bootstrapped");
+        Assert.Single(await auditRepository.GetAllAsync(), entry => entry.EventType == "administrator.bootstrapped");
     }
 
     [Fact]
@@ -328,7 +328,7 @@ public sealed class IamTests
             administratorId = (await users.FindByNameAsync("contract-user"))!.Id;
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IIamUnitOfWork>();
             var grants = scope.ServiceProvider.GetRequiredService<ICameraAccessGrantRepository>();
-            var audit = scope.ServiceProvider.GetRequiredService<IIamAuditEventRepository>();
+            var audit = scope.ServiceProvider.GetRequiredService<IPlatformEventRepository>();
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => unitOfWork.ExecuteAtomicallyAsync(async _ =>
             {
@@ -342,7 +342,7 @@ public sealed class IamTests
         using var verifyScope = factory.Services.CreateScope();
         var database = verifyScope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.Equal(0, await database.CameraAccessGrants.CountAsync());
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync());
+        Assert.Equal(1, await database.PlatformEvents.CountAsync());
     }
 
     [Fact]

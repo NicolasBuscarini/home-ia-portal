@@ -158,10 +158,10 @@ public sealed class ActivityWatchModuleTests
         var administratorId = await GetUserIdAsync(factory, "contract-user");
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(entry =>
-            entry.Action == "activitywatch.read" && entry.ActorUserId == administratorId));
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(entry =>
-            entry.Action == "activitywatch.read.denied" && entry.ActorUserId == viewerId));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(entry =>
+            entry.EventType == "activitywatch.read" && entry.ActorUserId == administratorId));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(entry =>
+            entry.EventType == "activitywatch.read.denied" && entry.ActorUserId == viewerId));
     }
 
     [Fact]

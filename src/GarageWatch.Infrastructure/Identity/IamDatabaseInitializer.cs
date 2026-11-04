@@ -13,6 +13,7 @@ public sealed class IamDatabaseInitializer(
     IdentityBootstrapOptions bootstrap,
     GarageWatch.Infrastructure.Capture.CaptureOptions captureOptions,
     IPublicIdGenerator publicIds,
+    PlatformEventBackfillService platformEvents,
     TimeProvider timeProvider)
 {
     private static readonly string[] KnownRoles = ["User", "Viewer", "Administrator"];
@@ -30,6 +31,7 @@ public sealed class IamDatabaseInitializer(
         }
         await database.Database.MigrateAsync(cancellationToken);
         await BackfillPublicIdsAsync(cancellationToken);
+        await platformEvents.RunAsync(cancellationToken);
         await BackfillClipManifestPublicIdsAsync(cancellationToken);
         if (OperatingSystem.IsLinux() && File.Exists(databasePath))
             File.SetUnixFileMode(databasePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
@@ -64,12 +66,12 @@ public sealed class IamDatabaseInitializer(
             var assigned = await users.AddToRoleAsync(administrator, "Administrator");
             if (!assigned.Succeeded) throw new InvalidOperationException("Não foi possível atribuir o papel inicial de administrador.");
 
-            database.IamAuditEvents.Add(new IamAuditEvent
+            database.PlatformEvents.Add(new PlatformEvent
             {
                 Id = Guid.NewGuid(),
                 ActorUserId = administrator.Id,
                 SubjectUserId = administrator.Id,
-                Action = "administrator.bootstrapped",
+                EventType = "administrator.bootstrapped",
                 OccurredAtUtc = timeProvider.GetUtcNow()
             });
             await database.SaveChangesAsync(cancellationToken);

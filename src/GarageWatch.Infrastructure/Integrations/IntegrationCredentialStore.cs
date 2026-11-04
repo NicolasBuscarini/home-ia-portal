@@ -14,7 +14,7 @@ namespace GarageWatch.Infrastructure.Integrations;
 public sealed class IntegrationCredentialStore(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents,
+    IPlatformEventRepository auditEvents,
     IIntegrationCredentialProtector protector,
     TimeProvider timeProvider,
     ILogger<IntegrationCredentialStore> logger) : IIntegrationCredentialStore

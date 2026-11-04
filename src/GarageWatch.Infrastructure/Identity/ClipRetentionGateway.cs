@@ -50,7 +50,7 @@ public sealed class LocalClipRetentionGateway(ClipRetentionService service, IamD
 /// service owns the versioned retention policy, preservation state and archive execution.
 /// </summary>
 public sealed class RemoteClipRetentionGateway(IamDbContext database, IMonitoringRetentionClient client,
-    IIamUnitOfWork unitOfWork, IIamAuditEventRepository auditEvents, TimeProvider timeProvider)
+    IIamUnitOfWork unitOfWork, IPlatformEventRepository auditEvents, TimeProvider timeProvider)
     : IClipRetentionGateway
 {
     public async Task<ClipRetentionSettings> GetSettingsAsync(string publicCameraId,

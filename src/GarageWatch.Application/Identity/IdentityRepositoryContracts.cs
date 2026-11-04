@@ -8,8 +8,11 @@ public sealed record CameraAccessGrantRecord(Guid Id, Guid UserId, string Contex
     Guid GrantedByUserId, DateTimeOffset GrantedAtUtc, DateTimeOffset? RevokedAtUtc,
     IdentityUserSummary? User);
 
-public sealed record IamAuditEventRecord(Guid Id, Guid? ActorUserId, Guid? SubjectUserId, string Action,
-    string? ResourceId, DateTimeOffset OccurredAtUtc, IdentityUserSummary? Actor, IdentityUserSummary? Subject);
+public sealed record PlatformEventRecord(Guid Id, Guid? ActorUserId, Guid? SubjectUserId, string EventType,
+    string? ResourceId, DateTimeOffset OccurredAtUtc, IdentityUserSummary? Actor, IdentityUserSummary? Subject,
+    string? PublicId = null, Guid? EventId = null, string? Category = null, string? Severity = null,
+    string? Outcome = null, string? Source = null, string? PayloadHash = null,
+    DateTimeOffset? RecordedAtUtc = null);
 
 public interface ICameraAccessGrantRepository
 {
@@ -31,15 +34,15 @@ public interface ICameraAccessGrantRepository
         CancellationToken cancellationToken = default);
 }
 
-public interface IIamAuditEventRepository
+public interface IPlatformEventRepository
 {
-    Task<IamAuditEventRecord?> GetAsync(Guid id, bool withDetails = false,
+    Task<PlatformEventRecord?> GetAsync(Guid id, bool withDetails = false,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<IamAuditEventRecord>> GetAllAsync(bool withDetails = false,
+    Task<IReadOnlyList<PlatformEventRecord>> GetAllAsync(bool withDetails = false,
         CancellationToken cancellationToken = default);
 
-    Task<RepositoryPage<IamAuditEventRecord>> ListPaginatedAsync(int pageNumber, int pageSize,
+    Task<RepositoryPage<PlatformEventRecord>> ListPaginatedAsync(int pageNumber, int pageSize,
         bool withDetails = false, CancellationToken cancellationToken = default);
 
     void Append(Guid? actorUserId, Guid? subjectUserId, string action, string? resourceId,

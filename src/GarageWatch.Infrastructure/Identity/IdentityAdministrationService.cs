@@ -7,7 +7,7 @@ namespace GarageWatch.Infrastructure.Identity;
 public sealed class IdentityAdministrationService(
     IIamUnitOfWork unitOfWork,
     ICameraAccessGrantRepository grants,
-    IIamAuditEventRepository auditEvents,
+    IPlatformEventRepository auditEvents,
     IamDbContext database,
     UserManager<ApplicationUser> users,
     TimeProvider timeProvider)

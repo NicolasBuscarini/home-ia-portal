@@ -21,7 +21,7 @@ public interface IKnownPeopleGateway
 /// surfaced instead of silently losing the trail.
 /// </summary>
 public sealed class RemoteKnownPeopleGateway(IMonitoringRosterClient client, IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents, TimeProvider timeProvider, IBiometricPersonLinkStore links)
+    IPlatformEventRepository auditEvents, TimeProvider timeProvider, IBiometricPersonLinkStore links)
     : IKnownPeopleGateway
 {
     private const int LookupPageSize = 100;

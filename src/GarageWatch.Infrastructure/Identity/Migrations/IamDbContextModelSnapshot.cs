@@ -771,39 +771,6 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.ToTable("FaceExtractorSelections");
                 });
 
-            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IamAuditEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("ActorUserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("OccurredAtUtc")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ResourceId")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("SubjectUserId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ActorUserId");
-
-                    b.HasIndex("SubjectUserId", "OccurredAtUtc");
-
-                    b.ToTable("IamAuditEvents");
-                });
-
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IamMigrationState", b =>
                 {
                     b.Property<string>("Key")
@@ -909,6 +876,162 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.HasIndex("DeletedAtUtc", "DisplayName");
 
                     b.ToTable("KnownPeople");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PlatformEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CausationId")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientBrowser")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientDevice")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientOs")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientUserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Emitter")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HttpMethod")
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HttpRoute")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("HttpStatusCode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OccurredAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicId")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RecordedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequestId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Severity")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SpanId")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SubjectUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("ActorUserId", "OccurredAtUtc");
+
+                    b.HasIndex("EventType", "OccurredAtUtc");
+
+                    b.HasIndex("OccurredAtUtc", "Id");
+
+                    b.HasIndex("Outcome", "OccurredAtUtc");
+
+                    b.HasIndex("ResourceType", "ResourceId");
+
+                    b.HasIndex("Source", "EventId")
+                        .IsUnique();
+
+                    b.HasIndex("SubjectUserId", "OccurredAtUtc");
+
+                    b.ToTable("PlatformEvents", (string)null);
                 });
 
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalModule", b =>
@@ -1313,7 +1436,17 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
-            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IamAuditEvent", b =>
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IntegrationCredential", b =>
+                {
+                    b.HasOne("GarageWatch.Infrastructure.Identity.ApplicationUser", "UpdatedBy")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UpdatedBy");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PlatformEvent", b =>
                 {
                     b.HasOne("GarageWatch.Infrastructure.Identity.ApplicationUser", "Actor")
                         .WithMany()
@@ -1328,16 +1461,6 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.Navigation("Actor");
 
                     b.Navigation("Subject");
-                });
-
-            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IntegrationCredential", b =>
-                {
-                    b.HasOne("GarageWatch.Infrastructure.Identity.ApplicationUser", "UpdatedBy")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("UpdatedBy");
                 });
 
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalModuleMenuItem", b =>

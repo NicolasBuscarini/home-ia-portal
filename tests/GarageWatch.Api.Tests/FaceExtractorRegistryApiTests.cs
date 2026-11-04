@@ -67,7 +67,7 @@ public sealed class FaceExtractorRegistryApiTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.Single(await database.FaceExtractorCandidates.ToListAsync());
-        Assert.Equal(2, await database.IamAuditEvents.CountAsync(item => item.Action.StartsWith("face_extractor.")));
+        Assert.Equal(2, await database.PlatformEvents.CountAsync(item => item.EventType.StartsWith("face_extractor.")));
     }
 
     [Fact]

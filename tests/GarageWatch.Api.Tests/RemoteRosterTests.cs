@@ -47,7 +47,7 @@ public sealed class RemoteRosterTests
 
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-        var actions = await database.IamAuditEvents.Select(item => item.Action).ToArrayAsync();
+        var actions = await database.PlatformEvents.Select(item => item.EventType).ToArrayAsync();
         Assert.Contains("known_person.created", actions);
         Assert.Contains("known_person.removed", actions);
         Assert.False(await database.KnownPeople.AnyAsync(item => item.PublicId == publicId));
@@ -70,7 +70,7 @@ public sealed class RemoteRosterTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.False(await database.KnownPeople.AnyAsync());
-        Assert.False(await database.IamAuditEvents.AnyAsync(item => item.Action.StartsWith("known_person")));
+        Assert.False(await database.PlatformEvents.AnyAsync(item => item.EventType.StartsWith("known_person")));
     }
 
     [Fact]

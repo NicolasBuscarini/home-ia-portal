@@ -20,7 +20,7 @@ public sealed class ClipAnalysisDeniedException(string code) : Exception(code);
 public sealed class ClipAnalysisCapacityException : Exception;
 
 public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository audit, AccessProfileService profiles, CaptureOptions capture,
+    IPlatformEventRepository audit, AccessProfileService profiles, CaptureOptions capture,
     ClipAnalysisDispatchOptions options, TimeProvider timeProvider,
     IMonitoringAnalysisClient? remoteAnalysis = null)
 {

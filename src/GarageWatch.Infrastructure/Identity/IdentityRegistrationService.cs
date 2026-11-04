@@ -12,7 +12,7 @@ public enum RegistrationOutcome
 
 public sealed class IdentityRegistrationService(
     IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents,
+    IPlatformEventRepository auditEvents,
     UserManager<ApplicationUser> users,
     IOptions<IdentityOptions> identityOptions,
     TimeProvider timeProvider)

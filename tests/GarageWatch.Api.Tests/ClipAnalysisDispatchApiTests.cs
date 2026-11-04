@@ -79,8 +79,8 @@ public sealed class ClipAnalysisDispatchApiTests
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-            Assert.Equal(2, await database.IamAuditEvents.CountAsync(item =>
-                item.Action == "clip.trigger.configuration.updated"));
+            Assert.Equal(2, await database.PlatformEvents.CountAsync(item =>
+                item.EventType == "clip.trigger.configuration.updated"));
         }
     }
 

@@ -125,7 +125,7 @@ public sealed class PortalApiTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.Equal(1, await database.PortalModules.CountAsync(module => module.ModuleId == "wellness"));
-        Assert.Equal(2, await database.IamAuditEvents.CountAsync(entry => entry.Action.StartsWith("portal_module.")));
+        Assert.Equal(2, await database.PlatformEvents.CountAsync(entry => entry.EventType.StartsWith("portal_module.")));
     }
 
     [Fact]
@@ -167,8 +167,8 @@ public sealed class PortalApiTests
 
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(entry =>
-            entry.Action == "portal.preferences.updated"));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(entry =>
+            entry.EventType == "portal.preferences.updated"));
     }
 
     [Fact]

@@ -40,8 +40,8 @@ public sealed class RegistrationTests
             Assert.False(await users.IsInRoleAsync(user, "Viewer"));
             Assert.False(await users.IsInRoleAsync(user, "Administrator"));
             Assert.Equal(0, await database.CameraAccessGrants.CountAsync(grant => grant.UserId == userId));
-            var audit = await database.IamAuditEvents.SingleAsync(entry => entry.SubjectUserId == userId);
-            Assert.Equal("user.registered", audit.Action);
+            var audit = await database.PlatformEvents.SingleAsync(entry => entry.SubjectUserId == userId);
+            Assert.Equal("user.registered", audit.EventType);
             Assert.Null(audit.ActorUserId);
         }
 
@@ -81,7 +81,7 @@ public sealed class RegistrationTests
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.Equal(2, await users.Users.CountAsync());
-        Assert.Equal(1, await database.IamAuditEvents.CountAsync(entry => entry.Action == "user.registered"));
+        Assert.Equal(1, await database.PlatformEvents.CountAsync(entry => entry.EventType == "user.registered"));
     }
 
     [Fact]

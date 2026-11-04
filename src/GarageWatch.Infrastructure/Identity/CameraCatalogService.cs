@@ -8,7 +8,7 @@ namespace GarageWatch.Infrastructure.Identity;
 public sealed class CameraCatalogService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IIamAuditEventRepository auditEvents,
+    IPlatformEventRepository auditEvents,
     UserManager<ApplicationUser> users,
     AccessProfileService accessProfiles,
     IPublicIdGenerator publicIds,

@@ -76,6 +76,7 @@ public static class PublicIdPrefixes
     public const string KnownPersonPrefix = "PER";
     public const string FaceExtractorPrefix = "FEX";
     public const string BiometricEnrollmentPrefix = "BIO";
+    public const string EventPrefix = "EVT";
 
     public static string For(IHasPublicId entity) => entity switch
     {
@@ -90,6 +91,7 @@ public static class PublicIdPrefixes
         KnownPerson => KnownPersonPrefix,
         FaceExtractorCandidate => FaceExtractorPrefix,
         BiometricEnrollment => BiometricEnrollmentPrefix,
+        PlatformEvent => EventPrefix,
         _ => throw new InvalidOperationException("Namespace de ID público não registrado.")
     };
 }

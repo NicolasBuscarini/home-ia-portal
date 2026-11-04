@@ -52,7 +52,7 @@ public sealed class PublicIdTests
         var generatedBefore = generator.Generated(PublicIdPrefixes.AccessProfilePrefix);
         var profileCount = await database.AccessProfiles.CountAsync();
         var versionCount = await database.AccessProfileVersions.CountAsync();
-        var auditCount = await database.IamAuditEvents.CountAsync();
+        var auditCount = await database.PlatformEvents.CountAsync();
         for (var attempt = 0; attempt < 3; attempt++)
             generator.Enqueue(PublicIdPrefixes.AccessProfilePrefix, existingPublicId!);
 
@@ -61,7 +61,7 @@ public sealed class PublicIdTests
 
         Assert.Equal(profileCount, await database.AccessProfiles.CountAsync());
         Assert.Equal(versionCount, await database.AccessProfileVersions.CountAsync());
-        Assert.Equal(auditCount, await database.IamAuditEvents.CountAsync());
+        Assert.Equal(auditCount, await database.PlatformEvents.CountAsync());
         Assert.Equal(generatedBefore + 3, generator.Generated(PublicIdPrefixes.AccessProfilePrefix));
     }
 

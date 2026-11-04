@@ -77,10 +77,10 @@ public sealed class CameraCatalogTests
         Assert.False(inactiveCamera.IsEnabled);
         Assert.False(inactiveContext.IsEnabled);
         Assert.Equal(2, await database.CameraCatalog.CountAsync());
-        Assert.Equal(5, await database.IamAuditEvents.CountAsync(entry =>
-            entry.Action.StartsWith("camera_catalog.") || entry.Action.StartsWith("camera_context.")));
-        Assert.Equal(6, await database.IamAuditEvents.CountAsync());
-        Assert.Contains(await database.IamAuditEvents.Select(entry => entry.Action).ToArrayAsync(),
+        Assert.Equal(5, await database.PlatformEvents.CountAsync(entry =>
+            entry.EventType.StartsWith("camera_catalog.") || entry.EventType.StartsWith("camera_context.")));
+        Assert.Equal(6, await database.PlatformEvents.CountAsync());
+        Assert.Contains(await database.PlatformEvents.Select(entry => entry.EventType).ToArrayAsync(),
             action => action == "camera_catalog.deactivated");
     }
 

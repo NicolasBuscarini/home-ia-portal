@@ -94,8 +94,8 @@ public sealed class CameraResourceAuthorizationTests
             var profiles = scope.ServiceProvider.GetRequiredService<AccessProfileService>();
             await profiles.ReplaceAssignmentsAsync(adminId, grantedViewerId, [], CancellationToken.None);
             var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-            Assert.True(await database.IamAuditEvents.AnyAsync(entry => entry.SubjectUserId == ungrantedViewerId &&
-                entry.Action == "camera.access.denied" && entry.ResourceId == cameraPublicId));
+            Assert.True(await database.PlatformEvents.AnyAsync(entry => entry.SubjectUserId == ungrantedViewerId &&
+                entry.EventType == "camera.access.denied" && entry.ResourceId == cameraPublicId));
         }
 
         // A still-open cookie cannot use a grant removed from the authoritative SQLite store.

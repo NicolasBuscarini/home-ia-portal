@@ -39,12 +39,12 @@ public sealed class CameraClipTriggerConfigurationService(IamDbContext database,
                 camera.ClipTriggerEnabled = enabled;
                 camera.ClipTriggerVersion = checked(camera.ClipTriggerVersion + 1);
                 camera.UpdatedAtUtc = timeProvider.GetUtcNow();
-                database.IamAuditEvents.Add(new IamAuditEvent
+                database.PlatformEvents.Add(new PlatformEvent
                 {
                     Id = Guid.NewGuid(),
                     ActorUserId = actorId,
                     SubjectUserId = actorId,
-                    Action = "clip.trigger.configuration.updated",
+                    EventType = "clip.trigger.configuration.updated",
                     ResourceId = publicCameraId,
                     OccurredAtUtc = camera.UpdatedAtUtc
                 });

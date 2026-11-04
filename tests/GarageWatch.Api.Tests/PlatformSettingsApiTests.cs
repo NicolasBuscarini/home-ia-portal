@@ -65,7 +65,7 @@ public sealed class PlatformSettingsApiTests
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-        Assert.True(await db.IamAuditEvents.CountAsync(entry => entry.Action == "platform.settings.updated") >= 1);
+        Assert.True(await db.PlatformEvents.CountAsync(entry => entry.EventType == "platform.settings.updated") >= 1);
 
         var reloaded = PlatformSettingsFile.LoadOrCreate(
             factory.Services.GetRequiredService<IConfiguration>());

@@ -50,7 +50,7 @@ public sealed class RemoteBiometricTests
         {
             var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
             Assert.False(await database.BiometricEnrollments.AnyAsync());
-            var actions = await database.IamAuditEvents.Select(item => item.Action).ToArrayAsync();
+            var actions = await database.PlatformEvents.Select(item => item.EventType).ToArrayAsync();
             Assert.Contains("biometric.enrollment_created", actions);
         }
 
@@ -59,8 +59,8 @@ public sealed class RemoteBiometricTests
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-            var revoked = await database.IamAuditEvents
-                .Where(item => item.Action == "biometric.enrollment_revoked")
+            var revoked = await database.PlatformEvents
+                .Where(item => item.EventType == "biometric.enrollment_revoked")
                 .Select(item => item.ResourceId)
                 .ToArrayAsync();
             Assert.Contains(publicId, revoked);
@@ -81,8 +81,8 @@ public sealed class RemoteBiometricTests
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-            Assert.Contains(await database.IamAuditEvents.ToArrayAsync(),
-                item => item.Action == "biometric.enrollment_revoked" && item.ResourceId == activeId);
+            Assert.Contains(await database.PlatformEvents.ToArrayAsync(),
+                item => item.EventType == "biometric.enrollment_revoked" && item.ResourceId == activeId);
         }
     }
 
@@ -106,7 +106,7 @@ public sealed class RemoteBiometricTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.False(await database.BiometricEnrollments.AnyAsync());
-        Assert.False(await database.IamAuditEvents.AnyAsync(item => item.Action.StartsWith("biometric.")));
+        Assert.False(await database.PlatformEvents.AnyAsync(item => item.EventType.StartsWith("biometric.")));
     }
 
     [Fact]

@@ -182,10 +182,14 @@ public sealed class PlatformEventContractTests
         };
 
         Assert.Null(PlatformEventValidator.Validate(legacy, Now));
+        Assert.Null(PlatformEventValidator.Validate(legacy with { Source = PlatformEventSources.Portal }, Now));
         Assert.Equal(PlatformEventValidationErrors.InvalidOutcome,
             PlatformEventValidator.Validate(legacy with { Outcome = PlatformEventOutcomes.Success }, Now));
-        Assert.Equal(PlatformEventValidationErrors.InvalidSource,
-            PlatformEventValidator.Validate(legacy with { Source = PlatformEventSources.Portal }, Now));
+        Assert.Equal(PlatformEventValidationErrors.MetadataKeyNotAllowed,
+            PlatformEventValidator.Validate(legacy with
+            {
+                Metadata = new Dictionary<string, object?>(StringComparer.Ordinal) { ["unexpected"] = true }
+            }, Now));
     }
 
     [Fact]

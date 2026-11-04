@@ -102,8 +102,6 @@ public static class PlatformEventValidator
         IReadOnlyList<string> metadataAllowlist;
         if (string.Equals(value.Category, PlatformEventCategories.Legacy, StringComparison.Ordinal))
         {
-            if (value.Source is not (PlatformEventSources.Legacy or PlatformEventSources.IamLegacy))
-                return PlatformEventValidationErrors.InvalidSource;
             if (!string.Equals(value.Outcome, PlatformEventOutcomes.Unknown, StringComparison.Ordinal))
                 return PlatformEventValidationErrors.InvalidOutcome;
             if (!IsSafeToken(value.EventType, 64))

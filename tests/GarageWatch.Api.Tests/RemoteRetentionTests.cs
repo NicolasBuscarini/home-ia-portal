@@ -56,8 +56,8 @@ public sealed class RemoteRetentionTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         Assert.Equal(["clip.retention.policy.updated"],
-            await database.IamAuditEvents.Where(item => item.Action.StartsWith("clip."))
-                .Select(item => item.Action).ToArrayAsync());
+            await database.PlatformEvents.Where(item => item.EventType.StartsWith("clip."))
+                .Select(item => item.EventType).ToArrayAsync());
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public sealed class RemoteRetentionTests
 
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
-        Assert.False(await database.IamAuditEvents.AnyAsync(item => item.Action.StartsWith("clip.")));
+        Assert.False(await database.PlatformEvents.AnyAsync(item => item.EventType.StartsWith("clip.")));
         Assert.False(await database.ClipRetentionPolicies.AnyAsync());
         Assert.False(await database.ClipPreservations.AnyAsync());
     }
