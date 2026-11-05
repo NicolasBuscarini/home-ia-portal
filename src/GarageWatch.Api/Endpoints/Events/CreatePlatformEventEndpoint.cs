@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using GarageWatch.Api.Correlation;
 using GarageWatch.Api.Endpoints;
@@ -65,7 +63,7 @@ public sealed class CreatePlatformEventEndpoint() : BaseEndpoint("EventStore", "
                 value = value with
                 {
                     Actor = new PlatformEventActorV1(user.PublicId, null, null),
-                    SessionId = ResolveSessionId(context)
+                    SessionId = PlatformEventSession.Resolve(context)
                 };
             }
 
@@ -109,20 +107,6 @@ public sealed class CreatePlatformEventEndpoint() : BaseEndpoint("EventStore", "
 
     private static IResult Forbidden() =>
         Results.Json(new ApiErrorResponse("forbidden_event_context"), statusCode: StatusCodes.Status403Forbidden);
-
-    /// <summary>
-    /// Login issues an opaque session claim. Cookies issued before that claim existed fall back to
-    /// a one-way fingerprint of the authentication cookie so old sessions remain attributable
-    /// without ever storing the cookie or its secret.
-    /// </summary>
-    private static string? ResolveSessionId(HttpContext context)
-    {
-        var claim = context.User.FindFirstValue("session_id");
-        if (!string.IsNullOrEmpty(claim)) return claim;
-        var cookie = context.Request.Cookies["garagewatch.session"];
-        if (string.IsNullOrEmpty(cookie)) return null;
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cookie)))[..32].ToLowerInvariant();
-    }
 
     private static async Task<(PlatformEventV1? Value, string? Error)> ReadAsync(HttpRequest request,
         CancellationToken cancellationToken)

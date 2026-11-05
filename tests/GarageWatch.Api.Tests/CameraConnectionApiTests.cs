@@ -57,9 +57,19 @@ public sealed class CameraConnectionApiTests
             new UpdateCameraAddressRequest("192.168.0.120", "camera-garage.lan"));
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
         Assert.Equal("camera-garage.lan", bridge.Address);
+        var correlationId = Assert.Single(update.Headers.GetValues("X-Correlation-ID"));
         using var auditScope = factory.Services.CreateScope();
-        Assert.Equal(1, await auditScope.ServiceProvider.GetRequiredService<IamDbContext>().PlatformEvents
-            .CountAsync(entry => entry.EventType == "camera.connection.address.updated"));
+        var recorded = await auditScope.ServiceProvider.GetRequiredService<IamDbContext>().PlatformEvents
+            .SingleAsync(entry => entry.EventType == "camera.connection.address.updated");
+        Assert.Equal(correlationId, recorded.CorrelationId);
+        Assert.Equal("administration", recorded.Category);
+        Assert.Equal("portal", recorded.Source);
+        Assert.Equal("server", recorded.Emitter);
+        Assert.Equal("success", recorded.Outcome);
+        Assert.Equal("camera", recorded.ResourceType);
+        Assert.Equal(cameraPublicId, recorded.ResourceId);
+        Assert.NotNull(recorded.ActorUserId);
+        Assert.Equal(64, recorded.PayloadHash!.Length);
     }
 
     private sealed class TestCameraConnectionManager(string address) : ICameraConnectionManager

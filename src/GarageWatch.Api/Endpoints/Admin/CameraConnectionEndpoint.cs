@@ -3,6 +3,7 @@ using System.Security.Claims;
 using GarageWatch.Api.Contracts;
 using GarageWatch.Api.Endpoints;
 using GarageWatch.Application.Cameras;
+using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Application.Identity;
 using GarageWatch.Infrastructure.Capture;
 using GarageWatch.Infrastructure.Identity;
@@ -47,8 +48,8 @@ public sealed class UpdateCameraConnectionEndpoint() : BaseEndpoint("Camera admi
         routes.MapPut("/api/v1/admin/cameras/{cameraId}/connection", async (string cameraId,
             UpdateCameraAddressRequest request, HttpContext context, ClaimsPrincipal principal,
             UserManager<ApplicationUser> users, CaptureOptions capture, IamDbContext database,
-            ICameraConnectionManager manager, IIamUnitOfWork unitOfWork, IPlatformEventRepository audit,
-            TimeProvider timeProvider, CancellationToken cancellationToken) =>
+            ICameraConnectionManager manager, IIamUnitOfWork unitOfWork, IPlatformEventRecorder recorder,
+            CancellationToken cancellationToken) =>
         {
             if (!EndpointSecurity.IsSameOrigin(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
             if (!PublicIdFormat.IsValid(cameraId, PublicIdPrefixes.CameraPrefix))
@@ -65,11 +66,13 @@ public sealed class UpdateCameraConnectionEndpoint() : BaseEndpoint("Camera admi
             try
             {
                 var updated = await manager.UpdateAddressAsync(request.ExpectedAddress, request.Address, cancellationToken);
-                await unitOfWork.ExecuteAtomicallyAsync(token =>
+                await unitOfWork.ExecuteAtomicallyAsync(async token =>
                 {
-                    audit.Append(actor.Id, actor.Id, "camera.connection.address.updated", cameraId,
-                        timeProvider.GetUtcNow());
-                    return Task.CompletedTask;
+                    await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                        "camera.connection.address.updated", PlatformEventOutcomes.Success,
+                        Subject: new PlatformEventReferenceV1("user", actor.PublicId!),
+                        Resource: new PlatformEventReferenceV1("camera", cameraId)), token);
+                    return true;
                 }, cancellationToken);
                 return Results.Ok(new CameraConnectionResponse(cameraId, updated.Address, true));
             }

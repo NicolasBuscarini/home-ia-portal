@@ -9,6 +9,7 @@ using GarageWatch.Api.Security;
 using GarageWatch.Infrastructure;
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Application.Profiles;
+using GarageWatch.Application.PlatformEvents;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
@@ -28,9 +29,14 @@ builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.W
 builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
 builder.Services.AddScoped<CorrelationContext>();
 builder.Services.AddScoped<ICorrelationContext>(services => services.GetRequiredService<CorrelationContext>());
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IPlatformEventOriginAccessor, HttpPlatformEventOriginAccessor>();
+builder.Services.AddTransient<CorrelationPropagationHandler>();
 var platformSettings = PlatformSettingsFile.LoadOrCreate(builder.Configuration);
 builder.Configuration.AddInMemoryCollection(PlatformSettingsFile.ToConfiguration(platformSettings.Values));
 builder.Services.AddPlatformInfrastructure(builder.Configuration);
+builder.Services.AddHttpClient("monitoring-module")
+    .AddHttpMessageHandler<CorrelationPropagationHandler>();
 builder.Services.AddSingleton<LivePlaylistSequence>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<ClientPresenceRegistry>();

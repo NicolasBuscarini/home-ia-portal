@@ -122,6 +122,7 @@ public static class DependencyInjection
         services.AddScoped<ICameraAccessGrantRepository, CameraAccessGrantRepository>();
         services.AddScoped<IPlatformEventRepository, PlatformEventRepository>();
         services.AddScoped<IPlatformEventWriter, PlatformEventWriter>();
+        services.AddScoped<IPlatformEventRecorder, PlatformEventRecorder>();
         services.AddScoped<PlatformEventBackfillService>();
         services.AddScoped<PlatformEventRetentionService>();
         services.AddSingleton(provider => PlatformEventServiceTokenOptions.FromConfiguration(
