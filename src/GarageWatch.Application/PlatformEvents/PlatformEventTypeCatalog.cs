@@ -170,6 +170,10 @@ public sealed class PlatformEventTypeCatalog
         new("integration_credential.rotated", PlatformEventCategories.Integration,
             PlatformEventSeverities.Info, []),
         new("navigation.viewed", PlatformEventCategories.Navigation, PlatformEventSeverities.Info, []),
-        new("ui.action", PlatformEventCategories.Navigation, PlatformEventSeverities.Info, [])
+        new("ui.action", PlatformEventCategories.Navigation, PlatformEventSeverities.Info, []),
+        new("event_store.queried", PlatformEventCategories.Administration,
+            PlatformEventSeverities.Info, ["pageSize", "resultCount", "hasCursor"]),
+        new("event_store.viewed", PlatformEventCategories.Administration,
+            PlatformEventSeverities.Info, [])
     ];
 }

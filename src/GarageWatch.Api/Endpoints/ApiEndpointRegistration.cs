@@ -46,6 +46,7 @@ public static class ApiEndpointRegistration
             new Portal.GetMonitoringModuleHealthEndpoint(),
             new Portal.GetPortalHealthEndpoint(),
             new Events.CreatePlatformEventEndpoint(),
+            new Admin.ListPlatformEventsEndpoint(), new Admin.GetPlatformEventEndpoint(),
             new Biometrics.ListBiometricEnrollmentsEndpoint(), new Biometrics.EnrollBiometricEndpoint(),
             new Biometrics.RevokeBiometricEnrollmentEndpoint(),
             new Live.GetPlaylistEndpoint(), new Live.GetSegmentEndpoint(),

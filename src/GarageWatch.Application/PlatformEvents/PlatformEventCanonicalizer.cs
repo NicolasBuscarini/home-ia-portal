@@ -92,6 +92,35 @@ public static class PlatformEventCanonicalizer
         return buffer.ToArray();
     }
 
+    /// <summary>
+    /// Restores the typed values accepted by <see cref="WriteMetadataValue"/> so a stored event can
+    /// be hashed again for the administrative integrity check.
+    /// </summary>
+    public static IReadOnlyDictionary<string, object?>? DeserializeMetadata(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+            throw new JsonException("Metadata do evento não é um objeto.");
+        var metadata = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var property in document.RootElement.EnumerateObject())
+        {
+            metadata[property.Name] = property.Value.ValueKind switch
+            {
+                JsonValueKind.String => property.Value.GetString(),
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Null => null,
+                JsonValueKind.Number when property.Value.TryGetInt64(out var integer) => integer,
+                JsonValueKind.Number when property.Value.TryGetDecimal(out var number) => number,
+                JsonValueKind.Number => property.Value.GetDouble(),
+                _ => throw new JsonException("Valor de metadata do evento não suportado.")
+            };
+        }
+
+        return metadata;
+    }
+
     private static void WriteNullableString(Utf8JsonWriter writer, string name, string? value)
     {
         if (value is null) writer.WriteNull(name);
