@@ -1,5 +1,6 @@
 using GarageWatch.Application.Identity;
 using GarageWatch.Application.Monitoring;
+using GarageWatch.Application.PlatformEvents;
 
 namespace GarageWatch.Infrastructure.Identity;
 
@@ -21,7 +22,7 @@ public interface IKnownPeopleGateway
 /// surfaced instead of silently losing the trail.
 /// </summary>
 public sealed class RemoteKnownPeopleGateway(IMonitoringRosterClient client, IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents, TimeProvider timeProvider, IBiometricPersonLinkStore links)
+    IPlatformEventRecorder recorder, TimeProvider timeProvider, IBiometricPersonLinkStore links)
     : IKnownPeopleGateway
 {
     private const int LookupPageSize = 100;
@@ -63,11 +64,12 @@ public sealed class RemoteKnownPeopleGateway(IMonitoringRosterClient client, IIa
 
         var created = await client.CreateAsync(new MonitoringRosterCreateRequest(name, intendedPurpose, true),
             cancellationToken);
-        var now = timeProvider.GetUtcNow();
-        await unitOfWork.ExecuteAtomicallyAsync(token =>
+        await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
-            auditEvents.Append(actorId, null, "known_person.created", created.PublicId, now);
-            return Task.FromResult(0);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "known_person.created", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("known_person", created.PublicId)), token);
+            return 0;
         }, cancellationToken);
         return new KnownPersonResult(created.PublicId, created.DisplayName, created.Purpose,
             created.AuthorizationRecordedAtUtc, created.CreatedAtUtc, created.Version);
@@ -82,7 +84,9 @@ public sealed class RemoteKnownPeopleGateway(IMonitoringRosterClient client, IIa
         await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
             await links.UnlinkActiveForPersonAsync(publicId, now, token);
-            auditEvents.Append(actorId, null, "known_person.removed", publicId, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "known_person.removed", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("known_person", publicId)), token);
             return 0;
         }, cancellationToken);
     }

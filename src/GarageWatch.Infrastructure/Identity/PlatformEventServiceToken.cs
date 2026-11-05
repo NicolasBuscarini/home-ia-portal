@@ -31,7 +31,11 @@ public sealed record PlatformEventServiceTokenOptions(string? Secret, string Aud
 public sealed class PlatformEventServiceTokenValidator(
     PlatformEventServiceTokenOptions options, TimeProvider timeProvider)
 {
-    public bool TryValidate(string? token, out string subject)
+    public bool TryValidate(string? token, out string subject) =>
+        TryValidate(token, PlatformEventServiceTokenOptions.RequiredScope, out subject);
+
+    /// <summary>Validates the signature, audience, residence and one narrow scope supplied by the endpoint.</summary>
+    public bool TryValidate(string? token, string requiredScope, out string subject)
     {
         subject = string.Empty;
         if (!options.Configured || string.IsNullOrWhiteSpace(token) || token.Length > 4096)
@@ -72,7 +76,7 @@ public sealed class PlatformEventServiceTokenValidator(
             if (!string.Equals(ReadString(root, "aud"), options.Audience, StringComparison.Ordinal)) return false;
             if (!string.Equals(ReadString(root, "residence_id"), options.ResidenceId, StringComparison.Ordinal))
                 return false;
-            if (!HasScope(ReadString(root, "scope"))) return false;
+            if (!HasScope(ReadString(root, "scope"), requiredScope)) return false;
             if (!root.TryGetProperty("exp", out var exp) || !exp.TryGetInt64(out var expiresAt) ||
                 expiresAt <= timeProvider.GetUtcNow().ToUnixTimeSeconds())
                 return false;
@@ -90,9 +94,9 @@ public sealed class PlatformEventServiceTokenValidator(
         }
     }
 
-    private static bool HasScope(string? scope) =>
+    private static bool HasScope(string? scope, string requiredScope) =>
         scope?.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Contains(PlatformEventServiceTokenOptions.RequiredScope, StringComparer.Ordinal) == true;
+            .Contains(requiredScope, StringComparer.Ordinal) == true;
 
     private static string? ReadString(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String

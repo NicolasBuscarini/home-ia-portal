@@ -7,7 +7,8 @@ using Microsoft.Extensions.Logging;
 namespace GarageWatch.Infrastructure.Identity;
 
 public sealed class PlatformEventRetentionService(
-    IamDbContext database, PlatformEventRetentionOptions options, TimeProvider timeProvider)
+    IamDbContext database, PlatformEventRetentionOptions options, TimeProvider timeProvider,
+    PlatformEventMetrics? metrics = null)
 {
     public async Task<int> RunOnceAsync(CancellationToken cancellationToken = default)
     {
@@ -37,6 +38,7 @@ public sealed class PlatformEventRetentionService(
             if (batch.Count < options.BatchSize) break;
         }
 
+        if (deleted > 0) metrics?.RetentionDeleted(deleted);
         return deleted;
     }
 }

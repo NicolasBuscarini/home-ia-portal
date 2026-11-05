@@ -1,5 +1,6 @@
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,7 +9,7 @@ namespace GarageWatch.Infrastructure.Identity;
 public sealed class IdentityAdministrationService(
     IIamUnitOfWork unitOfWork,
     ICameraAccessGrantRepository grants,
-    IPlatformEventRepository auditEvents,
+    IPlatformEventRecorder recorder,
     IamDbContext database,
     UserManager<ApplicationUser> users,
     AccessProfileService profiles,
@@ -43,7 +44,7 @@ public sealed class IdentityAdministrationService(
         if (add.Length > 0 && !(await users.AddToRolesAsync(user, add)).Succeeded)
             throw new InvalidOperationException("Não foi possível atribuir os papéis à conta.");
         await InvalidateSessionsAsync(user);
-        Record(actorUserId, subjectUserId, "user.roles.updated");
+        await RecordAsync(actorUserId, subjectUserId, "user.roles.updated", null, token);
     }, cancellationToken);
 
     public Task DeactivateUserAsync(Guid actorUserId, Guid subjectUserId,
@@ -68,7 +69,7 @@ public sealed class IdentityAdministrationService(
         foreach (var grant in activeGrants)
         {
             grant.RevokedAtUtc = revokedAtUtc;
-            Record(actorUserId, subjectUserId, "camera.access.revoked", grant.CameraId);
+            await RecordAsync(actorUserId, subjectUserId, "camera.access.revoked", grant.CameraId, token);
         }
 
         var activeProfileAssignments = await database.UserAccessProfileAssignments
@@ -81,7 +82,7 @@ public sealed class IdentityAdministrationService(
         var updated = await users.UpdateAsync(user);
         if (!updated.Succeeded) throw new InvalidOperationException("Não foi possível desativar a conta.");
         await InvalidateSessionsAsync(user);
-        Record(actorUserId, subjectUserId, "user.deactivated");
+        await RecordAsync(actorUserId, subjectUserId, "user.deactivated", null, token);
     }, cancellationToken);
 
     public Task GrantCameraAsync(Guid actorUserId, Guid subjectUserId, string contextId, string cameraId,
@@ -105,7 +106,7 @@ public sealed class IdentityAdministrationService(
 
         grants.Add(subjectUserId, contextId, cameraId, actorUserId, timeProvider.GetUtcNow());
         await InvalidateSessionsAsync(user);
-        Record(actorUserId, subjectUserId, "camera.access.granted", cameraId);
+        await RecordAsync(actorUserId, subjectUserId, "camera.access.granted", cameraId, token);
     }, cancellationToken);
 
     public Task RevokeCameraAsync(Guid actorUserId, Guid subjectUserId, string cameraId,
@@ -115,7 +116,7 @@ public sealed class IdentityAdministrationService(
         if (!await grants.RevokeActiveAsync(subjectUserId, cameraId, timeProvider.GetUtcNow(), token)) return;
         var user = await users.FindByIdAsync(subjectUserId.ToString());
         if (user is not null) await InvalidateSessionsAsync(user);
-        Record(actorUserId, subjectUserId, "camera.access.revoked", cameraId);
+        await RecordAsync(actorUserId, subjectUserId, "camera.access.revoked", cameraId, token);
     }, cancellationToken);
 
     private async Task<bool> HasOtherAdministratorAsync(Guid excludedUserId, CancellationToken cancellationToken)
@@ -146,8 +147,17 @@ public sealed class IdentityAdministrationService(
         if (!result.Succeeded) throw new InvalidOperationException("Não foi possível revogar as sessões da conta.");
     }
 
-    private void Record(Guid actorUserId, Guid subjectUserId, string action, string? resourceId = null) =>
-        auditEvents.Append(actorUserId, subjectUserId, action, resourceId, timeProvider.GetUtcNow());
+    private async Task RecordAsync(Guid actorUserId, Guid subjectUserId, string action,
+        string? resourceId, CancellationToken cancellationToken)
+    {
+        var subject = await database.FindUserPublicIdAsync(subjectUserId, cancellationToken);
+        await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            action, PlatformEventOutcomes.Success,
+            Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+            Resource: resourceId is null ? null : new PlatformEventReferenceV1(
+                action.StartsWith("camera.", StringComparison.Ordinal) ? "camera" : "user", resourceId)),
+            cancellationToken);
+    }
 
     private static void ValidateIdentifier(string value, string parameterName)
     {

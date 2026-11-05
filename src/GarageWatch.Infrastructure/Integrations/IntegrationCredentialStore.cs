@@ -1,4 +1,5 @@
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Application.Portal;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,7 @@ namespace GarageWatch.Infrastructure.Integrations;
 public sealed class IntegrationCredentialStore(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents,
+    IPlatformEventRecorder recorder,
     IIntegrationCredentialProtector protector,
     TimeProvider timeProvider,
     ILogger<IntegrationCredentialStore> logger) : IIntegrationCredentialStore
@@ -79,7 +80,9 @@ public sealed class IntegrationCredentialStore(
             entity.UpdatedAtUtc = now;
             entity.UpdatedByUserId = actorUserId;
             entity.Version++;
-            auditEvents.Append(actorUserId, null, "integration_credential.updated", normalized, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "integration_credential.updated", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("integration", normalized), OccurredAtUtc: now), token);
             return new IntegrationCredentialStatus(normalized, true, entity.KeyVersion, now, entity.Version);
         }, cancellationToken);
     }
@@ -94,8 +97,10 @@ public sealed class IntegrationCredentialStore(
                 .SingleOrDefaultAsync(credential => credential.IntegrationId == normalized, token);
             if (entity is null) return new IntegrationCredentialStatus(normalized, false, null, null, 0);
             database.IntegrationCredentials.Remove(entity);
-            auditEvents.Append(actorUserId, null, "integration_credential.removed", normalized,
-                timeProvider.GetUtcNow());
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "integration_credential.removed", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("integration", normalized),
+                OccurredAtUtc: timeProvider.GetUtcNow()), token);
             return new IntegrationCredentialStatus(normalized, false, null, null, 0);
         }, cancellationToken);
     }
@@ -112,7 +117,10 @@ public sealed class IntegrationCredentialStore(
             entity.Tag = sealedCredential.Tag;
             entity.UpdatedAtUtc = timeProvider.GetUtcNow();
             entity.Version++;
-            auditEvents.Append(null, null, "integration_credential.rotated", integrationId, entity.UpdatedAtUtc);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "integration_credential.rotated", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("integration", integrationId),
+                OccurredAtUtc: entity.UpdatedAtUtc), cancellationToken);
             await database.SaveChangesAsync(cancellationToken);
             return new(plaintext, entity.KeyVersion);
         }

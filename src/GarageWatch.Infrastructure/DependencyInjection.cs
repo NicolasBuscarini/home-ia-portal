@@ -97,6 +97,7 @@ public static class DependencyInjection
                 ? provider.GetRequiredService<LocalIdentityEmbeddingSource>()
                 : provider.GetRequiredService<RemoteIdentityEmbeddingSource>());
         services.AddScoped<IdentityMatchService>();
+        services.AddScoped<IdentityTriageService>();
         services.AddScoped<LocalBiometricEnrollmentGateway>();
         services.AddScoped<RemoteBiometricEnrollmentGateway>();
         services.AddScoped<IBiometricEnrollmentGateway, RemoteBiometricEnrollmentGateway>();
@@ -120,12 +121,15 @@ public static class DependencyInjection
         services.AddSingleton<IamTransactionGate>();
         services.AddScoped<IIamUnitOfWork, IamUnitOfWork>();
         services.AddScoped<ICameraAccessGrantRepository, CameraAccessGrantRepository>();
+        services.AddSingleton<PlatformEventMetrics>();
         services.AddScoped<IPlatformEventRepository, PlatformEventRepository>();
         services.AddScoped<IPlatformEventWriter, PlatformEventWriter>();
+        services.AddSingleton<IPlatformEventExecutionContext, PlatformEventExecutionContext>();
         services.AddScoped<IPlatformEventRecorder, PlatformEventRecorder>();
         services.AddScoped<IPlatformEventQueryService, PlatformEventQueryService>();
         services.AddScoped<PlatformEventBackfillService>();
         services.AddScoped<PlatformEventRetentionService>();
+        services.AddScoped<IdentityObservationRetentionService>();
         services.AddSingleton(provider => PlatformEventServiceTokenOptions.FromConfiguration(
             provider.GetRequiredService<IConfiguration>()));
         services.AddSingleton<PlatformEventServiceTokenValidator>();
@@ -141,6 +145,8 @@ public static class DependencyInjection
         var faceExtractorOptions = FaceExtractorOptions.FromEnvironment(configuration);
         var portalOptions = PortalOptions.FromConfiguration(configuration);
         var platformEventRetentionOptions = PlatformEventRetentionOptions.FromConfiguration(configuration);
+        var identityObservationRetentionOptions =
+            IdentityObservationRetentionOptions.FromConfiguration(configuration);
         services.AddSingleton(provider =>
         {
             var token = MonitoringServiceTokenOptions.FromConfiguration(
@@ -189,6 +195,7 @@ public static class DependencyInjection
         services.AddSingleton(captureOptions);
         services.AddSingleton(portalOptions);
         services.AddSingleton(platformEventRetentionOptions);
+        services.AddSingleton(identityObservationRetentionOptions);
         services.AddSingleton(triggerOptions);
         services.AddSingleton(clipAnalysisOptions);
         services.AddSingleton(detectorOptions);
@@ -212,6 +219,7 @@ public static class DependencyInjection
         services.AddSingleton<SpoolWatcherWorker>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<SpoolWatcherWorker>());
         services.AddSingleton<IHostedService, PlatformEventRetentionWorker>();
+        services.AddSingleton<IHostedService, IdentityObservationRetentionWorker>();
         return services;
     }
 }

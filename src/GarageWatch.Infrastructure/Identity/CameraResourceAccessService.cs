@@ -10,9 +10,8 @@ namespace GarageWatch.Infrastructure.Identity;
 public sealed class CameraResourceAccessService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents,
-    AccessProfileService profiles,
-    TimeProvider timeProvider) : ICameraResourceAccess
+    IPlatformEventRecorder recorder,
+    AccessProfileService profiles) : ICameraResourceAccess
 {
     public async Task<bool> CanReadLiveAsync(Guid userId, string cameraId,
         CancellationToken cancellationToken = default)
@@ -26,12 +25,14 @@ public sealed class CameraResourceAccessService(
             new PermissionRequest("live.video.view", catalogCamera.ContextId, catalogCamera.CameraId), cancellationToken);
         if (allowed) return true;
 
-        await unitOfWork.ExecuteAtomicallyAsync(token =>
+        await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
-            auditEvents.Append(userId, userId, "camera.access.denied", PublicIdFormat.IsValid(cameraId,
-                    PublicIdPrefixes.CameraPrefix) ? cameraId : null,
-                timeProvider.GetUtcNow(), PlatformEventOutcomes.Denied);
-            return Task.CompletedTask;
+            var subject = await database.FindUserPublicIdAsync(userId, token);
+            var resource = PublicIdFormat.IsValid(cameraId, PublicIdPrefixes.CameraPrefix) ? cameraId : null;
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "camera.access.denied", PlatformEventOutcomes.Denied,
+                Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+                Resource: resource is null ? null : new PlatformEventReferenceV1("camera", resource)), token);
         }, cancellationToken);
         return false;
     }

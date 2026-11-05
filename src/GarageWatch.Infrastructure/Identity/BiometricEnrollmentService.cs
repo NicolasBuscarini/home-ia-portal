@@ -6,6 +6,8 @@ using GarageWatch.Application.Identity;
 using GarageWatch.Infrastructure.Identity.Repositories;
 using Microsoft.EntityFrameworkCore;
 
+using GarageWatch.Application.PlatformEvents;
+
 namespace GarageWatch.Infrastructure.Identity;
 
 public sealed record BiometricEnrollmentSummary(string PublicId, string UserPublicId, string Status,
@@ -29,7 +31,7 @@ public sealed class BiometricEnrollmentRejectedException(string code) : Exceptio
 }
 
 public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository audit, AccessProfileService profiles, IBiometricDataProtector protector,
+    IPlatformEventRecorder recorder, AccessProfileService profiles, IBiometricDataProtector protector,
     IEnumerable<IFaceEnrollmentExtractor> extractors, TimeProvider timeProvider, IPublicIdGenerator publicIds,
     ILogger<BiometricEnrollmentService> logger, IBiometricPersonLinkStore links)
 {
@@ -113,7 +115,13 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
                     previous.RevokedReason = "replaced";
                     ClearPayload(previous);
                     await links.UnlinkActiveForEnrollmentAsync(previous.PublicId!, now, token);
-                    audit.Append(actorId, target.Id, "biometric.enrollment_revoked", previous.PublicId, now);
+                    await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                        "biometric.enrollment_revoked", PlatformEventOutcomes.Success,
+                        Subject: target.PublicId is null
+                            ? null
+                            : new PlatformEventReferenceV1("user", target.PublicId),
+                        Resource: new PlatformEventReferenceV1("biometric_enrollment", previous.PublicId!),
+                        OccurredAtUtc: now), token);
                 }
                 var enrollment = new BiometricEnrollment
                 {
@@ -138,7 +146,11 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
                     CreatedAtUtc = now
                 };
                 database.BiometricEnrollments.Add(enrollment);
-                audit.Append(actorId, target.Id, "biometric.enrollment_created", enrollment.PublicId, now);
+                await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                    "biometric.enrollment_created", PlatformEventOutcomes.Success,
+                    Subject: target.PublicId is null ? null : new PlatformEventReferenceV1("user", target.PublicId),
+                    Resource: new PlatformEventReferenceV1("biometric_enrollment", enrollment.PublicId!),
+                    OccurredAtUtc: now), token);
                 return enrollment;
             }, cancellationToken);
             return Map(created, target.PublicId!);
@@ -169,7 +181,12 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
             enrollment.RevokedReason = isOwner ? "owner_request" : "administrator_request";
             ClearPayload(enrollment);
             await links.UnlinkActiveForEnrollmentAsync(enrollment.PublicId!, now, token);
-            audit.Append(actorId, enrollment.UserId, "biometric.enrollment_revoked", enrollment.PublicId, now);
+            var subject = await database.FindUserPublicIdAsync(enrollment.UserId, token);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "biometric.enrollment_revoked", PlatformEventOutcomes.Success,
+                Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+                Resource: new PlatformEventReferenceV1("biometric_enrollment", enrollment.PublicId!),
+                OccurredAtUtc: now), token);
             return true;
         }, cancellationToken);
     }
@@ -191,7 +208,12 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
                 enrollment.RevokedReason = "expired";
                 ClearPayload(enrollment);
                 await links.UnlinkActiveForEnrollmentAsync(enrollment.PublicId!, now, token);
-                audit.Append(null, enrollment.UserId, "biometric.enrollment_expired", enrollment.PublicId, now);
+                var subject = await database.FindUserPublicIdAsync(enrollment.UserId, token);
+                await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                    "biometric.enrollment_expired", PlatformEventOutcomes.Success,
+                    Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+                    Resource: new PlatformEventReferenceV1("biometric_enrollment", enrollment.PublicId!),
+                    OccurredAtUtc: now), token);
             }
             await Task.CompletedTask;
             return due.Length;

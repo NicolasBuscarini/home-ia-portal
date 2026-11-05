@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GarageWatch.Infrastructure.Identity.Repositories;
 
-public sealed class PlatformEventRepository(IamDbContext database, TimeProvider timeProvider)
+public sealed class PlatformEventRepository(IamDbContext database)
     : BaseRepository<PlatformEvent>(database), IPlatformEventRepository
 {
     public async Task<PlatformEventRecord?> GetAsync(Guid id, bool withDetails = false,
@@ -23,51 +23,10 @@ public sealed class PlatformEventRepository(IamDbContext database, TimeProvider 
     }
 
     /// <summary>
-    /// Compatibility append for audited portal actions that still describe the fact as an action
-    /// string. When the action is a catalog type the row is written with the typed category and
-    /// severity plus a real outcome, so new rows stop being <c>legacy</c>; an action outside the
-    /// catalog keeps the legacy envelope as an explicit safety net and remains visible as such.
-    /// Call sites move to <see cref="IPlatformEventRecorder"/> as they gain actor/subject references.
+    /// Append-only read boundary. All audited writes go through <see cref="IPlatformEventRecorder"/>
+    /// (typed envelope, actor/subject by public reference); the compatibility append no longer exists,
+    /// so rows are either typed or preserved backfilled history.
     /// </summary>
-    public void Append(Guid? actorUserId, Guid? subjectUserId, string action, string? resourceId,
-        DateTimeOffset occurredAtUtc, string? outcome = null)
-    {
-        var typed = PlatformEventTypeCatalog.Default.TryGet(action, out var definition);
-        var category = typed ? definition.Category : PlatformEventCategories.Legacy;
-        var severity = typed ? definition.DefaultSeverity : PlatformEventSeverities.Info;
-        var resolvedOutcome = typed
-            ? outcome ?? PlatformEventOutcomes.Success
-            : PlatformEventOutcomes.Unknown;
-        var id = Guid.NewGuid();
-        var occurred = occurredAtUtc.ToUniversalTime();
-        var recorded = timeProvider.GetUtcNow().ToUniversalTime();
-        var value = new PlatformEventV1(id, action, category,
-            severity, resolvedOutcome, occurred,
-            PlatformEventSources.Portal, null, PlatformEventEmitters.Server);
-        var error = PlatformEventValidator.Validate(value, recorded);
-        if (error is not null)
-            throw new InvalidOperationException($"Evento de auditoria inválido ({error}).");
-
-        AddEntity(new PlatformEvent
-        {
-            Id = id,
-            EventId = id,
-            SchemaVersion = PlatformEventContract.SchemaVersion,
-            EventType = action,
-            Category = category,
-            Severity = severity,
-            Outcome = resolvedOutcome,
-            Source = PlatformEventSources.Portal,
-            Emitter = PlatformEventEmitters.Server,
-            ActorUserId = actorUserId,
-            SubjectUserId = subjectUserId,
-            ResourceId = resourceId,
-            OccurredAtUtc = occurred,
-            RecordedAtUtc = recorded,
-            PayloadHash = PlatformEventCanonicalizer.ComputePayloadHash(value)
-        });
-    }
-
     protected override IQueryable<PlatformEvent> ApplyDetails(IQueryable<PlatformEvent> query) =>
         query.Include(entry => entry.Actor).Include(entry => entry.Subject);
 

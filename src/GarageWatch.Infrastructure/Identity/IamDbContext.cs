@@ -10,6 +10,16 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
     : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
 {
     internal bool DeferPublicIdCollisionRetries { get; set; }
+
+    /// <summary>
+    /// Read-only translation from an internal user key to the immutable public id used by
+    /// <c>platform-event.v1</c> actor/subject references.
+    /// </summary>
+    public Task<string?> FindUserPublicIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        Users.AsNoTracking()
+            .Where(user => user.Id == userId)
+            .Select(user => user.PublicId)
+            .FirstOrDefaultAsync(cancellationToken);
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicksConverter = new(
         value => value.UtcTicks,
         value => new DateTimeOffset(value, TimeSpan.Zero));
@@ -33,6 +43,9 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
     public DbSet<KnownPerson> KnownPeople => Set<KnownPerson>();
     public DbSet<BiometricEnrollment> BiometricEnrollments => Set<BiometricEnrollment>();
     public DbSet<BiometricPersonLink> BiometricPersonLinks => Set<BiometricPersonLink>();
+    public DbSet<IdentityObservation> IdentityObservations => Set<IdentityObservation>();
+    public DbSet<IdentityObservationCandidate> IdentityObservationCandidates => Set<IdentityObservationCandidate>();
+    public DbSet<IdentityObservationReview> IdentityObservationReviews => Set<IdentityObservationReview>();
     public DbSet<FaceExtractorCandidate> FaceExtractorCandidates => Set<FaceExtractorCandidate>();
     public DbSet<FaceExtractorSelection> FaceExtractorSelections => Set<FaceExtractorSelection>();
     public DbSet<ClipRetentionPolicy> ClipRetentionPolicies => Set<ClipRetentionPolicy>();
@@ -317,6 +330,48 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
             entity.HasIndex(link => link.EnrollmentPublicId).IsUnique()
                 .HasFilter("\"UnlinkedAtUtc\" IS NULL");
             entity.HasIndex(link => new { link.KnownPersonPublicId, link.UnlinkedAtUtc });
+        });
+        builder.Entity<IdentityObservation>(entity =>
+        {
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.ObservationHash).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.SchemaVersion).HasMaxLength(32).IsRequired();
+            entity.Property(item => item.ModelId).HasMaxLength(128).IsRequired();
+            entity.Property(item => item.ModelVersion).HasMaxLength(128).IsRequired();
+            entity.Property(item => item.EmbeddingSchemaVersion).HasMaxLength(32).IsRequired();
+            entity.Property(item => item.CameraPublicId).HasMaxLength(32);
+            entity.Property(item => item.ClipPublicId).HasMaxLength(32);
+            entity.Property(item => item.ObservedAtUtc).HasConversion(UtcTicksConverter);
+            entity.Property(item => item.IngestedAtUtc).HasConversion(UtcTicksConverter);
+            entity.Property(item => item.BestPersonPublicId).HasMaxLength(32);
+            entity.Property(item => item.PolicyVersion).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.ResolvedPersonPublicId).HasMaxLength(32);
+            entity.Property(item => item.LatestReviewPublicId).HasMaxLength(32);
+            entity.Property(item => item.Version).IsConcurrencyToken();
+            entity.HasIndex(item => item.ObservationHash).IsUnique();
+            entity.HasIndex(item => new { item.ReviewStatus, item.IngestedAtUtc });
+            entity.HasIndex(item => new { item.CameraPublicId, item.ObservedAtUtc });
+            ConfigurePublicId(entity, PublicIdPrefixes.IdentityObservationPrefix);
+        });
+        builder.Entity<IdentityObservationCandidate>(entity =>
+        {
+            entity.HasKey(candidate => candidate.Id);
+            entity.Property(candidate => candidate.PersonPublicId).HasMaxLength(32).IsRequired();
+            entity.HasIndex(candidate => new { candidate.ObservationId, candidate.Rank }).IsUnique();
+            entity.HasOne<IdentityObservation>().WithMany(item => item.Candidates)
+                .HasForeignKey(candidate => candidate.ObservationId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<IdentityObservationReview>(entity =>
+        {
+            entity.HasKey(review => review.Id);
+            entity.Property(review => review.ReviewerPublicId).HasMaxLength(32).IsRequired();
+            entity.Property(review => review.SelectedPersonPublicId).HasMaxLength(32);
+            entity.Property(review => review.Note).HasMaxLength(500);
+            entity.Property(review => review.CreatedAtUtc).HasConversion(UtcTicksConverter);
+            entity.HasIndex(review => new { review.ObservationId, review.CreatedAtUtc });
+            entity.HasOne<IdentityObservation>().WithMany(item => item.Reviews)
+                .HasForeignKey(review => review.ObservationId).OnDelete(DeleteBehavior.Cascade);
+            ConfigurePublicId(entity, PublicIdPrefixes.IdentityReviewPrefix);
         });
         builder.Entity<FaceExtractorCandidate>(entity =>
         {

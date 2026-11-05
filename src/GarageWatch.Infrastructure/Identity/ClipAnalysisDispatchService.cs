@@ -21,8 +21,8 @@ public sealed class ClipAnalysisDeniedException(string code) : Exception(code);
 public sealed class ClipAnalysisCapacityException : Exception;
 
 public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository audit, AccessProfileService profiles, CaptureOptions capture,
-    ClipAnalysisDispatchOptions options, TimeProvider timeProvider,
+    IPlatformEventRecorder recorder, AccessProfileService profiles, CaptureOptions capture,
+    ClipAnalysisDispatchOptions options,
     IMonitoringAnalysisClient? remoteAnalysis = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -74,10 +74,9 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         {
             throw new ClipAnalysisConflictException("policy_version_conflict");
         }
-        await unitOfWork.ExecuteAtomicallyAsync(token =>
+        await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
-            Audit(actorId, "clip.analysis.policy.updated", cameraId);
-            return Task.CompletedTask;
+            await AuditAsync(actorId, "clip.analysis.policy.updated", cameraId, null, token);
         }, cancellationToken);
         return new ClipAnalysisPolicyResult(scope.CameraPublicId, scope.ContextPublicId, updated.Policy,
             updated.Version, updated.UpdatedAtUtc);
@@ -144,10 +143,9 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
     }
 
     private async Task AuditDeniedAsync(Guid actorId, string clipId, CancellationToken cancellationToken) =>
-        await unitOfWork.ExecuteAtomicallyAsync(token =>
+        await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
-            Audit(actorId, "clip.analysis.request.denied", clipId, PlatformEventOutcomes.Denied);
-            return Task.CompletedTask;
+            await AuditAsync(actorId, "clip.analysis.request.denied", clipId, PlatformEventOutcomes.Denied, token);
         }, cancellationToken);
 
     private async Task<CameraScope?> FindEnabledCameraAsync(string cameraId, CancellationToken cancellationToken) =>
@@ -204,7 +202,15 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
     private static bool HasVersionedLargeMotionEvidence(ClipManifestV1 clip) => false;
     private static Guid DeterministicKey(string clipId, string analysisVersion) =>
         new(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{clipId}:{analysisVersion}"))[..16]);
-    private void Audit(Guid? actorId, string action, string clipId, string? outcome = null) =>
-        audit.Append(actorId, actorId, action, clipId, timeProvider.GetUtcNow(), outcome);
+    private async Task AuditAsync(Guid? actorId, string action, string resourceId, string? outcome,
+        CancellationToken cancellationToken)
+    {
+        var subject = actorId is null ? null : await database.FindUserPublicIdAsync(actorId.Value, cancellationToken);
+        var resourceType = action.StartsWith("clip.analysis.policy", StringComparison.Ordinal) ? "camera" : "clip";
+        await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            action, outcome ?? PlatformEventOutcomes.Success,
+            Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+            Resource: new PlatformEventReferenceV1(resourceType, resourceId)), cancellationToken);
+    }
     private sealed record CameraScope(string ContextId, string CameraId, string CameraPublicId, string ContextPublicId);
 }

@@ -1,5 +1,6 @@
 using GarageWatch.Application.Identity;
 using GarageWatch.Application.Monitoring;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.EntityFrameworkCore;
 
 namespace GarageWatch.Infrastructure.Identity;
@@ -50,7 +51,7 @@ public sealed class LocalClipRetentionGateway(ClipRetentionService service, IamD
 /// service owns the versioned retention policy, preservation state and archive execution.
 /// </summary>
 public sealed class RemoteClipRetentionGateway(IamDbContext database, IMonitoringRetentionClient client,
-    IIamUnitOfWork unitOfWork, IPlatformEventRepository auditEvents, TimeProvider timeProvider)
+    IIamUnitOfWork unitOfWork, IPlatformEventRecorder recorder)
     : IClipRetentionGateway
 {
     public async Task<ClipRetentionSettings> GetSettingsAsync(string publicCameraId,
@@ -124,11 +125,14 @@ public sealed class RemoteClipRetentionGateway(IamDbContext database, IMonitorin
     private async Task AuditAsync(Guid actorId, string action, string resourceId,
         CancellationToken cancellationToken)
     {
-        var now = timeProvider.GetUtcNow();
-        await unitOfWork.ExecuteAtomicallyAsync(token =>
+        var subject = await database.FindUserPublicIdAsync(actorId, cancellationToken);
+        var resourceType = action.StartsWith("clip.retention.policy", StringComparison.Ordinal) ? "camera" : "clip";
+        await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
-            auditEvents.Append(actorId, null, action, resourceId, now);
-            return Task.FromResult(0);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                action, PlatformEventOutcomes.Success,
+                Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+                Resource: new PlatformEventReferenceV1(resourceType, resourceId)), token);
         }, cancellationToken);
     }
 

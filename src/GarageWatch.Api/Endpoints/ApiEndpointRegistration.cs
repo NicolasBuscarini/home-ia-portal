@@ -6,7 +6,7 @@ public static class ApiEndpointRegistration
     {
         BaseEndpoint[] endpoints =
         [
-            new Health.LiveEndpoint(), new Health.ReadyEndpoint(),
+            new Health.LiveEndpoint(), new Health.ReadyEndpoint(), new Health.MetricsEndpoint(),
             new Authentication.LoginEndpoint(), new Authentication.RegisterEndpoint(),
             new Authentication.LogoutEndpoint(), new Authentication.SessionEndpoint(),
             new Authentication.MeEndpoint(), new Clients.HeartbeatEndpoint(),
@@ -49,6 +49,10 @@ public static class ApiEndpointRegistration
             new Admin.ListPlatformEventsEndpoint(), new Admin.GetPlatformEventEndpoint(),
             new Biometrics.ListBiometricEnrollmentsEndpoint(), new Biometrics.EnrollBiometricEndpoint(),
             new Biometrics.RevokeBiometricEnrollmentEndpoint(),
+            new Biometrics.IngestIdentityObservationEndpoint(),
+            new Biometrics.ListIdentityObservationsEndpoint(),
+            new Biometrics.GetIdentityObservationEndpoint(),
+            new Biometrics.ReviewIdentityObservationEndpoint(),
             new Live.GetPlaylistEndpoint(), new Live.GetSegmentEndpoint(),
             new System.GetSystemProfileEndpoint()
         ];

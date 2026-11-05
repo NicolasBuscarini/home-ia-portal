@@ -18,7 +18,7 @@ public sealed class GetActivityWatchSummaryEndpoint() : BaseEndpoint("Portal", "
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/portal/modules/activitywatch/summary", async (ClaimsPrincipal principal,
             UserManager<ApplicationUser> users, AccessProfileService profiles, IPermissionEvaluator evaluator,
-            IActivityWatchModule activityWatch, IamDbContext database, IPlatformEventRepository auditEvents,
+            IActivityWatchModule activityWatch, IamDbContext database, IPlatformEventRecorder recorder,
             TimeProvider timeProvider, CancellationToken cancellationToken) =>
         {
             var user = await users.GetUserAsync(principal);
@@ -28,20 +28,21 @@ public sealed class GetActivityWatchSummaryEndpoint() : BaseEndpoint("Portal", "
             if (!moduleEnabled) return Results.NotFound(new ApiErrorResponse("portal_resource_not_found"));
 
             var subject = await profiles.GetSubjectAsync(user.Id, cancellationToken);
-            var now = timeProvider.GetUtcNow();
             if (!subject.IsActive ||
                 !evaluator.IsAllowed(subject, new PermissionRequest("activitywatch.read")))
             {
-                auditEvents.Append(user.Id, null, "activitywatch.read.denied", "activitywatch", now,
-                    PlatformEventOutcomes.Denied);
+                await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                    "activitywatch.read.denied", PlatformEventOutcomes.Denied,
+                    Resource: new PlatformEventReferenceV1("portal.module", "activitywatch")), cancellationToken);
                 await database.SaveChangesAsync(cancellationToken);
                 return Results.Forbid();
             }
 
             var summary = await activityWatch.GetSummaryAsync(cancellationToken);
-            auditEvents.Append(user.Id, null,
-                summary.Reachable ? "activitywatch.read" : "activitywatch.read.unavailable", "activitywatch", now,
-                summary.Reachable ? null : PlatformEventOutcomes.Error);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                summary.Reachable ? "activitywatch.read" : "activitywatch.read.unavailable",
+                summary.Reachable ? PlatformEventOutcomes.Success : PlatformEventOutcomes.Error,
+                Resource: new PlatformEventReferenceV1("portal.module", "activitywatch")), cancellationToken);
             await database.SaveChangesAsync(cancellationToken);
             return Results.Json(summary, statusCode: summary.Reachable
                 ? StatusCodes.Status200OK

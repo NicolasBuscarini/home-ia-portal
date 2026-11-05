@@ -7,6 +7,8 @@ using GarageWatch.Infrastructure.Identity.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using GarageWatch.Application.PlatformEvents;
+
 namespace GarageWatch.Infrastructure.Identity;
 
 public interface IBiometricEnrollmentGateway
@@ -47,7 +49,7 @@ public sealed class LocalBiometricEnrollmentGateway(BiometricEnrollmentService s
 /// </summary>
 public sealed class RemoteBiometricEnrollmentGateway(IamDbContext database, AccessProfileService profiles,
     IBiometricDataProtector protector, IEnumerable<IFaceEnrollmentExtractor> extractors,
-    IMonitoringBiometricClient client, IIamUnitOfWork unitOfWork, IPlatformEventRepository audit,
+    IMonitoringBiometricClient client, IIamUnitOfWork unitOfWork, IPlatformEventRecorder recorder,
     TimeProvider timeProvider, ILogger<RemoteBiometricEnrollmentGateway> logger,
     IBiometricPersonLinkStore links) : IBiometricEnrollmentGateway
 {
@@ -144,9 +146,19 @@ public sealed class RemoteBiometricEnrollmentGateway(IamDbContext database, Acce
             foreach (var replaced in result.ReplacedPublicIds)
             {
                 await links.UnlinkActiveForEnrollmentAsync(replaced, now, token);
-                audit.Append(actorId, target.Id, "biometric.enrollment_revoked", replaced, now);
+                await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                    "biometric.enrollment_revoked", PlatformEventOutcomes.Success,
+                    Subject: target.PublicId is null
+                        ? null
+                        : new PlatformEventReferenceV1("user", target.PublicId),
+                    Resource: new PlatformEventReferenceV1("biometric_enrollment", replaced),
+                    OccurredAtUtc: now), token);
             }
-            audit.Append(actorId, target.Id, "biometric.enrollment_created", result.Enrollment.PublicId, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "biometric.enrollment_created", PlatformEventOutcomes.Success,
+                Subject: target.PublicId is null ? null : new PlatformEventReferenceV1("user", target.PublicId),
+                Resource: new PlatformEventReferenceV1("biometric_enrollment", result.Enrollment.PublicId!),
+                OccurredAtUtc: now), token);
             return true;
         }, cancellationToken);
         return Map(result.Enrollment);
@@ -194,7 +206,11 @@ public sealed class RemoteBiometricEnrollmentGateway(IamDbContext database, Acce
         await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
             await links.UnlinkActiveForEnrollmentAsync(enrollmentPublicId, now, token);
-            audit.Append(actorId, subject?.Id, "biometric.enrollment_revoked", enrollmentPublicId, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "biometric.enrollment_revoked", PlatformEventOutcomes.Success,
+                Subject: subject?.PublicId is null ? null : new PlatformEventReferenceV1("user", subject.PublicId),
+                Resource: new PlatformEventReferenceV1("biometric_enrollment", enrollmentPublicId),
+                OccurredAtUtc: now), token);
             return true;
         }, cancellationToken);
     }

@@ -13,7 +13,8 @@ public sealed class PlatformEventRecorder(
     IamDbContext database,
     IPlatformEventWriter writer,
     IPlatformEventOriginAccessor originAccessor,
-    TimeProvider timeProvider) : IPlatformEventRecorder
+    TimeProvider timeProvider,
+    IPlatformEventExecutionContext? executionContext = null) : IPlatformEventRecorder
 {
     public async Task<PlatformEventWriteResult> RecordAsync(PlatformEventDraft draft,
         CancellationToken cancellationToken = default)
@@ -22,11 +23,12 @@ public sealed class PlatformEventRecorder(
             return PlatformEventWriteResult.Invalid(PlatformEventValidationErrors.UnknownEventType);
 
         var origin = originAccessor.Current;
+        var actorUserId = origin?.ActorUserId ?? executionContext?.Current?.UserId;
         string? actorPublicId = null;
-        if (origin?.ActorUserId is { } actorUserId)
+        if (actorUserId is { } resolvedActorUserId)
         {
             actorPublicId = await database.Users
-                .Where(user => user.Id == actorUserId)
+                .Where(user => user.Id == resolvedActorUserId)
                 .Select(user => user.PublicId)
                 .FirstOrDefaultAsync(cancellationToken);
             if (string.IsNullOrEmpty(actorPublicId))

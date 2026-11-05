@@ -1,6 +1,7 @@
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Identity;
 using GarageWatch.Application.Portal;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +10,7 @@ namespace GarageWatch.Infrastructure.Identity;
 public sealed class PortalService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents,
+    IPlatformEventRecorder recorder,
     UserManager<ApplicationUser> users,
     AccessProfileService profiles,
     IPermissionEvaluator evaluator,
@@ -55,7 +56,9 @@ public sealed class PortalService(
         };
         ApplyItems(entity, normalized.Items!);
         database.PortalModules.Add(entity);
-        auditEvents.Append(actorUserId, null, "portal_module.created", entity.ModuleId, now);
+        await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            "portal_module.created", PlatformEventOutcomes.Success,
+            Resource: new PlatformEventReferenceV1("portal.module", entity.ModuleId)), token);
         return Map(entity);
     }, cancellationToken);
 
@@ -86,8 +89,10 @@ public sealed class PortalService(
             ApplyItems(entity, normalized.Items!);
             entity.Version++;
             entity.UpdatedAtUtc = now;
-            auditEvents.Append(actorUserId, null,
-                normalized.IsEnabled ? "portal_module.updated" : "portal_module.disabled", entity.ModuleId, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                normalized.IsEnabled ? "portal_module.updated" : "portal_module.disabled",
+                PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("portal.module", entity.ModuleId)), token);
             return Map(entity);
         }, cancellationToken);
 
@@ -160,7 +165,10 @@ public sealed class PortalService(
                 preference.LanguageTag = language;
                 preference.UpdatedAtUtc = now;
             }
-            auditEvents.Append(userId, userId, "portal.preferences.updated", null, now);
+            var subject = await database.FindUserPublicIdAsync(userId, token);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "portal.preferences.updated", PlatformEventOutcomes.Success,
+                Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject)), token);
             return new PortalPreferences(theme, language, false, now, PortalPreferenceCatalog.Themes,
                 PortalPreferenceCatalog.Languages);
         }, cancellationToken);

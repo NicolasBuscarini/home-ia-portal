@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 
 namespace GarageWatch.Infrastructure.Identity;
 
@@ -8,7 +9,7 @@ public sealed record CameraClipTriggerConfiguration(string CameraId, bool Enable
     DateTimeOffset UpdatedAtUtc);
 
 public sealed class CameraClipTriggerConfigurationService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    UserManager<ApplicationUser> users, TimeProvider timeProvider, IPlatformEventRepository events)
+    UserManager<ApplicationUser> users, TimeProvider timeProvider, IPlatformEventRecorder recorder)
 {
     public async Task<CameraClipTriggerConfiguration> GetAsync(string publicCameraId,
         CancellationToken cancellationToken)
@@ -39,8 +40,11 @@ public sealed class CameraClipTriggerConfigurationService(IamDbContext database,
                 camera.ClipTriggerEnabled = enabled;
                 camera.ClipTriggerVersion = checked(camera.ClipTriggerVersion + 1);
                 camera.UpdatedAtUtc = timeProvider.GetUtcNow();
-                events.Append(actorId, actorId, "clip.trigger.configuration.updated", publicCameraId,
-                    camera.UpdatedAtUtc);
+                await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                    "clip.trigger.configuration.updated", PlatformEventOutcomes.Success,
+                    Subject: actor.PublicId is null ? null : new PlatformEventReferenceV1("user", actor.PublicId),
+                    Resource: new PlatformEventReferenceV1("camera", publicCameraId),
+                    OccurredAtUtc: camera.UpdatedAtUtc), token);
             }
             return new CameraClipTriggerConfiguration(camera.PublicId!, camera.ClipTriggerEnabled,
                 camera.ClipTriggerVersion, camera.UpdatedAtUtc);

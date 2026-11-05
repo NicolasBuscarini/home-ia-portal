@@ -11,7 +11,7 @@ namespace GarageWatch.Infrastructure.Identity;
 /// resource is the affected object. That keeps the stored hash reproducible from the columns.
 /// </summary>
 public sealed class PlatformEventWriter(IamDbContext database, TimeProvider timeProvider,
-    ILogger<PlatformEventWriter> logger)
+    ILogger<PlatformEventWriter> logger, PlatformEventMetrics? metrics = null)
     : IPlatformEventWriter
 {
     public const string SubjectUserType = "user";
@@ -20,20 +20,33 @@ public sealed class PlatformEventWriter(IamDbContext database, TimeProvider time
         CancellationToken cancellationToken = default)
     {
         var validation = PlatformEventValidator.Validate(value, timeProvider.GetUtcNow());
-        if (validation is not null) return PlatformEventWriteResult.Invalid(validation);
+        if (validation is not null)
+        {
+            metrics?.Rejected(validation);
+            return PlatformEventWriteResult.Invalid(validation);
+        }
 
         var actorId = await ResolveUserIdAsync(value.Actor?.UserPublicId, cancellationToken);
         if (value.Actor is not null && actorId is null)
+        {
+            metrics?.Rejected(PlatformEventValidationErrors.InvalidActor);
             return PlatformEventWriteResult.Invalid(PlatformEventValidationErrors.InvalidActor);
+        }
 
         Guid? subjectId = null;
         if (value.Subject is not null)
         {
             if (!string.Equals(value.Subject.Type, SubjectUserType, StringComparison.Ordinal))
+            {
+                metrics?.Rejected(PlatformEventValidationErrors.InvalidReference);
                 return PlatformEventWriteResult.Invalid(PlatformEventValidationErrors.InvalidReference);
+            }
             subjectId = await ResolveUserIdAsync(value.Subject.PublicId, cancellationToken);
             if (subjectId is null)
+            {
+                metrics?.Rejected(PlatformEventValidationErrors.InvalidReference);
                 return PlatformEventWriteResult.Invalid(PlatformEventValidationErrors.InvalidReference);
+            }
         }
 
         var normalized = value with
@@ -49,7 +62,10 @@ public sealed class PlatformEventWriter(IamDbContext database, TimeProvider time
 
         var existing = await FindAsync(normalized.Source, normalized.EventId, cancellationToken);
         if (existing is not null)
+        {
+            metrics?.Duplicated();
             return Duplicate(existing, payloadHash, normalized);
+        }
 
         var recordedAtUtc = timeProvider.GetUtcNow().ToUniversalTime();
         var entity = new PlatformEvent
@@ -101,9 +117,11 @@ public sealed class PlatformEventWriter(IamDbContext database, TimeProvider time
             database.Entry(entity).State = EntityState.Detached;
             existing = await FindAsync(normalized.Source, normalized.EventId, cancellationToken);
             if (existing is null) throw;
+            metrics?.Duplicated();
             return Duplicate(existing, payloadHash, normalized);
         }
 
+        metrics?.Appended(normalized.Source, normalized.Outcome);
         return PlatformEventWriteResult.Created(entity.PublicId!);
     }
 

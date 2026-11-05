@@ -1,4 +1,5 @@
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.EntityFrameworkCore;
 
 namespace GarageWatch.Infrastructure.Identity;
@@ -14,7 +15,7 @@ public sealed record BiometricPersonLinkSummary(string EnrollmentPublicId, strin
 public sealed class BiometricPersonLinkService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository audit,
+    IPlatformEventRecorder recorder,
     TimeProvider timeProvider,
     IKnownPeopleGateway people,
     IBiometricEnrollmentGateway enrollments)
@@ -42,7 +43,9 @@ public sealed class BiometricPersonLinkService(
             if (active is not null)
             {
                 active.UnlinkedAtUtc = now;
-                audit.Append(actorId, null, "biometric.person_unlinked", enrollmentPublicId, now);
+                await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                    "biometric.person_unlinked", PlatformEventOutcomes.Success,
+                    Resource: new PlatformEventReferenceV1("biometric_enrollment", enrollmentPublicId)), token);
             }
 
             var link = new BiometricPersonLink
@@ -54,7 +57,9 @@ public sealed class BiometricPersonLinkService(
                 LinkedAtUtc = now
             };
             database.BiometricPersonLinks.Add(link);
-            audit.Append(actorId, null, "biometric.person_linked", enrollmentPublicId, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "biometric.person_linked", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("biometric_enrollment", enrollmentPublicId)), token);
             return Map(link);
         }, cancellationToken);
     }
@@ -70,7 +75,9 @@ public sealed class BiometricPersonLinkService(
                 link.EnrollmentPublicId == enrollmentPublicId && link.UnlinkedAtUtc == null, token);
             if (active is null) return false;
             active.UnlinkedAtUtc = now;
-            audit.Append(actorId, null, "biometric.person_unlinked", enrollmentPublicId, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "biometric.person_unlinked", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("biometric_enrollment", enrollmentPublicId)), token);
             return true;
         }, cancellationToken);
     }

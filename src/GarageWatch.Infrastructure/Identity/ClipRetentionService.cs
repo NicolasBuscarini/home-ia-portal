@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Infrastructure.Capture;
 using GarageWatch.Infrastructure.Identity.Repositories;
 using Microsoft.AspNetCore.Identity;
@@ -21,7 +22,7 @@ public sealed class ClipRetentionConflictException(string code) : Exception(code
 
 public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork unitOfWork,
     UserManager<ApplicationUser> users, TimeProvider timeProvider, CaptureOptions capture,
-    ClipReadLeaseRegistry leases, IPlatformEventRepository events)
+    ClipReadLeaseRegistry leases, IPlatformEventRecorder recorder)
 {
     private const int DefaultRetentionDays = 15;
     private const long BytesPerGiB = 1_073_741_824;
@@ -86,7 +87,12 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
                 current.UpdatedByUserId = actorId.ToString("D");
                 current.UpdatedAtUtc = now;
             }
-            events.Append(actorId, actorId, "clip.retention.policy.updated", publicCameraId, now);
+            var subject = await database.FindUserPublicIdAsync(actorId, token);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "clip.retention.policy.updated", PlatformEventOutcomes.Success,
+                Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+                Resource: new PlatformEventReferenceV1("camera", publicCameraId),
+                OccurredAtUtc: now), token);
             return Map(camera.PublicId!, current);
         }, cancellationToken);
     }
@@ -134,8 +140,13 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
                 current.UpdatedByUserId = actorId.ToString("D");
                 current.UpdatedAtUtc = now;
             }
-            events.Append(actorId, actorId,
-                isPreserved ? "clip.preservation.enabled" : "clip.preservation.disabled", publicClipId, now);
+            var subject = await database.FindUserPublicIdAsync(actorId, token);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                isPreserved ? "clip.preservation.enabled" : "clip.preservation.disabled",
+                PlatformEventOutcomes.Success,
+                Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+                Resource: new PlatformEventReferenceV1("clip", publicClipId),
+                OccurredAtUtc: now), token);
             return new ClipPreservationSettings(publicClipId, current.IsPreserved, current.Version);
         }, cancellationToken);
     }
@@ -165,10 +176,11 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
 
     public async Task RecordExpiredAsync(string publicClipId, CancellationToken cancellationToken)
     {
-        await unitOfWork.ExecuteAtomicallyAsync(token =>
+        await unitOfWork.ExecuteAtomicallyAsync(async token =>
         {
-            events.Append(null, null, "clip.retention.expired", publicClipId, timeProvider.GetUtcNow());
-            return Task.CompletedTask;
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "clip.retention.expired", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("clip", publicClipId)), token);
         }, cancellationToken);
     }
 

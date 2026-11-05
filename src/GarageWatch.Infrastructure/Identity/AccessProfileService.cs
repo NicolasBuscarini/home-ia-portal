@@ -1,6 +1,7 @@
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Identity;
 using GarageWatch.Application.Profiles;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,7 +18,7 @@ public sealed record ProfileAssignmentRequest(Guid ProfileVersionId, IReadOnlyLi
 public sealed class AccessProfileService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository audit,
+    IPlatformEventRecorder recorder,
     UserManager<ApplicationUser> users,
     IPermissionEvaluator evaluator,
     IPublicIdGenerator publicIds,
@@ -58,7 +59,12 @@ public sealed class AccessProfileService(
         var version = NewVersion(profile.Id, 1, actorId, now, permissions, publicIds);
         database.AccessProfiles.Add(profile);
         database.AccessProfileVersions.Add(version);
-        audit.Append(actorId, actorId, "access_profile.created", profile.Id.ToString("D"), now);
+        var subject = await database.FindUserPublicIdAsync(actorId, token);
+        await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            "access_profile.created", PlatformEventOutcomes.Success,
+            Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+            Resource: new PlatformEventReferenceV1("access_profile",
+                profile.PublicId ?? profile.Id.ToString("D"))), token);
         return Map(profile, version, permissions);
     }, cancellationToken);
 
@@ -79,7 +85,12 @@ public sealed class AccessProfileService(
             database.AccessProfileVersions.Add(published);
             profile.Version = next;
             profile.UpdatedAtUtc = now;
-            audit.Append(actorId, actorId, "access_profile.version_published", profile.Id.ToString("D"), now);
+            var subject = await database.FindUserPublicIdAsync(actorId, token);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "access_profile.version_published", PlatformEventOutcomes.Success,
+                Subject: subject is null ? null : new PlatformEventReferenceV1("user", subject),
+                Resource: new PlatformEventReferenceV1("access_profile",
+                    profile.PublicId ?? profile.Id.ToString("D"))), token);
             return Map(profile, published, permissions);
         }, cancellationToken);
 
@@ -151,7 +162,10 @@ public sealed class AccessProfileService(
             }
             var stamp = await users.UpdateSecurityStampAsync(user);
             if (!stamp.Succeeded) throw new InvalidOperationException("Não foi possível revogar sessões existentes.");
-            audit.Append(actorId, userId, "access_profiles.assigned", null, now);
+            var assigned = await database.FindUserPublicIdAsync(userId, token);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "access_profiles.assigned", PlatformEventOutcomes.Success,
+                Subject: assigned is null ? null : new PlatformEventReferenceV1("user", assigned)), token);
         }, cancellationToken);
 
     public async Task<IReadOnlyList<AccessProfileAssignmentSummary>> GetAssignmentsAsync(Guid userId,

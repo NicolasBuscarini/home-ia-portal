@@ -3,12 +3,14 @@ using GarageWatch.Application.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+using GarageWatch.Application.PlatformEvents;
+
 namespace GarageWatch.Infrastructure.Identity;
 
 public sealed class CameraCatalogService(
     IamDbContext database,
     IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents,
+    IPlatformEventRecorder recorder,
     UserManager<ApplicationUser> users,
     AccessProfileService accessProfiles,
     IPublicIdGenerator publicIds,
@@ -106,7 +108,7 @@ public sealed class CameraCatalogService(
             UpdatedAtUtc = now
         };
         database.CameraContexts.Add(context);
-        Record(actorUserId, "camera_context.created", contextId);
+        await RecordAsync(actorUserId, "camera_context.created", contextId, token);
         return Map(context);
     }, cancellationToken);
 
@@ -131,7 +133,7 @@ public sealed class CameraCatalogService(
             context.IsEnabled = isEnabled;
             context.Version++;
             context.UpdatedAtUtc = timeProvider.GetUtcNow();
-            Record(actorUserId, "camera_context.updated", context.ContextId);
+            await RecordAsync(actorUserId, "camera_context.updated", context.ContextId, token);
             return Map(context);
         }, cancellationToken);
 
@@ -152,7 +154,7 @@ public sealed class CameraCatalogService(
             context.IsEnabled = false;
             context.Version++;
             context.UpdatedAtUtc = timeProvider.GetUtcNow();
-            Record(actorUserId, "camera_context.deactivated", context.ContextId);
+            await RecordAsync(actorUserId, "camera_context.deactivated", context.ContextId, token);
         }
         return Map(context);
     }, cancellationToken);
@@ -183,7 +185,7 @@ public sealed class CameraCatalogService(
             UpdatedAtUtc = now
         };
         database.CameraCatalog.Add(camera);
-        Record(actorUserId, "camera_catalog.created", cameraId);
+        await RecordAsync(actorUserId, "camera_catalog.created", cameraId, token);
         return Map(camera);
     }, cancellationToken);
 
@@ -213,7 +215,8 @@ public sealed class CameraCatalogService(
             camera.IsEnabled = isEnabled;
             camera.Version++;
             camera.UpdatedAtUtc = timeProvider.GetUtcNow();
-            Record(actorUserId, isEnabled ? "camera_catalog.updated" : "camera_catalog.deactivated", cameraId);
+            await RecordAsync(actorUserId,
+                isEnabled ? "camera_catalog.updated" : "camera_catalog.deactivated", cameraId, token);
             return Map(camera);
         }, cancellationToken);
 
@@ -233,7 +236,7 @@ public sealed class CameraCatalogService(
             camera.IsEnabled = false;
             camera.Version++;
             camera.UpdatedAtUtc = timeProvider.GetUtcNow();
-            Record(actorUserId, "camera_catalog.deactivated", cameraId);
+            await RecordAsync(actorUserId, "camera_catalog.deactivated", cameraId, token);
         }
         return Map(camera);
     }, cancellationToken);
@@ -245,8 +248,16 @@ public sealed class CameraCatalogService(
             throw new UnauthorizedAccessException("A operação requer administrador ativo.");
     }
 
-    private void Record(Guid actorUserId, string action, string resourceId) =>
-        auditEvents.Append(actorUserId, null, action, resourceId, timeProvider.GetUtcNow());
+    private async Task RecordAsync(Guid actorUserId, string action, string resourceId,
+        CancellationToken cancellationToken)
+    {
+        var resourceType = action.StartsWith("camera_context", StringComparison.Ordinal)
+            ? "camera_context"
+            : "camera";
+        await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            action, PlatformEventOutcomes.Success,
+            Resource: new PlatformEventReferenceV1(resourceType, resourceId)), cancellationToken);
+    }
 
     private static void ValidateIdentifier(string value, string parameterName)
     {

@@ -32,6 +32,22 @@ public interface IPlatformEventOriginAccessor
     PlatformEventOrigin? Current { get; }
 }
 
+/// <summary>
+/// Explicit execution context for portal actions that run outside an HTTP request (background
+/// work, repository-level tests, future service-to-service calls). Whoever invokes the use case
+/// directly declares the authenticated actor; the event draft never carries an actor id, so
+/// producers still cannot forge one. Inside a request the HTTP origin wins.
+/// </summary>
+public interface IPlatformEventExecutionContext
+{
+    PlatformEventExecutionActor? Current { get; }
+
+    /// <summary>Declares the actor for the current async flow until the scope is disposed.</summary>
+    IDisposable BeginActor(Guid userId);
+}
+
+public sealed record PlatformEventExecutionActor(Guid UserId);
+
 public interface IPlatformEventRecorder
 {
     Task<PlatformEventWriteResult> RecordAsync(PlatformEventDraft draft,

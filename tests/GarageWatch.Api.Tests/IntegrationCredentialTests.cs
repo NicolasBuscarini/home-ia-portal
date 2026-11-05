@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Application.Portal;
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Infrastructure.Integrations;
@@ -166,7 +167,7 @@ public sealed class IntegrationCredentialTests
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IIamUnitOfWork>();
-        var auditEvents = scope.ServiceProvider.GetRequiredService<IPlatformEventRepository>();
+        var auditEvents = scope.ServiceProvider.GetRequiredService<IPlatformEventRecorder>();
 
         var first = new AesGcmIntegrationCredentialProtector(Configuration("v1", "first-key-material", null, null),
             NullLogger<AesGcmIntegrationCredentialProtector>.Instance);

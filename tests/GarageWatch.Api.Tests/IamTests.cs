@@ -1,5 +1,6 @@
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -297,8 +298,12 @@ public sealed class IamTests
         Assert.True((await users.CreateAsync(viewer, "Viewer-Password-123!")).Succeeded);
         Assert.True((await users.AddToRoleAsync(viewer, "Viewer")).Succeeded);
         var cameraId = scope.ServiceProvider.GetRequiredService<GarageWatch.Infrastructure.Capture.CaptureOptions>().CameraId;
-        await scope.ServiceProvider.GetRequiredService<IdentityAdministrationService>()
-            .GrantCameraAsync(admin.Id, viewer.Id, "garage", cameraId);
+        using (var actorScope = scope.ServiceProvider.GetRequiredService<IPlatformEventExecutionContext>()
+                   .BeginActor(admin.Id))
+        {
+            await scope.ServiceProvider.GetRequiredService<IdentityAdministrationService>()
+                .GrantCameraAsync(admin.Id, viewer.Id, "garage", cameraId);
+        }
 
         var grantRepository = scope.ServiceProvider.GetRequiredService<ICameraAccessGrantRepository>();
         var bareGrant = Assert.IsType<CameraAccessGrantRecord>(await grantRepository.FindActiveAsync(viewer.Id, cameraId));
@@ -328,12 +333,14 @@ public sealed class IamTests
             administratorId = (await users.FindByNameAsync("contract-user"))!.Id;
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IIamUnitOfWork>();
             var grants = scope.ServiceProvider.GetRequiredService<ICameraAccessGrantRepository>();
-            var audit = scope.ServiceProvider.GetRequiredService<IPlatformEventRepository>();
+            var audit = scope.ServiceProvider.GetRequiredService<IPlatformEventRecorder>();
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => unitOfWork.ExecuteAtomicallyAsync(async _ =>
             {
                 grants.Add(administratorId, "garage", "rollback-camera", administratorId, DateTimeOffset.UtcNow);
-                audit.Append(administratorId, administratorId, "test.rollback", "rollback-camera", DateTimeOffset.UtcNow);
+                await audit.RecordRequiredAsync(new PlatformEventDraft(
+                    "camera.access.granted", PlatformEventOutcomes.Success,
+                    Resource: new PlatformEventReferenceV1("camera", "rollback-camera")));
                 await Task.Yield();
                 throw new InvalidOperationException("force rollback");
             }));

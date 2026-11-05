@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Identity;
 
 using GarageWatch.Application.Authorization;
 
+using GarageWatch.Application.PlatformEvents;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed record UpdatePlatformSettingsRequest(int ExpectedVersion, PlatformSettingsValues Values);
@@ -43,7 +45,7 @@ public sealed class UpdatePlatformSettingsEndpoint()
                     IConfiguration configuration,
                     UserManager<ApplicationUser> users,
                     IIamUnitOfWork unitOfWork,
-                    IPlatformEventRepository audit,
+                    IPlatformEventRecorder recorder,
                     TimeProvider timeProvider) =>
                 {
                     if (!EndpointSecurity.IsSameOrigin(context))
@@ -70,15 +72,15 @@ public sealed class UpdatePlatformSettingsEndpoint()
                     }
 
                     await unitOfWork.ExecuteAtomicallyAsync(
-                        token =>
+                        async token =>
                         {
-                            audit.Append(
-                                actor.Id,
-                                actor.Id,
-                                "platform.settings.updated",
-                                "platform-settings",
-                                timeProvider.GetUtcNow());
-                            return Task.CompletedTask;
+                            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                                "platform.settings.updated", PlatformEventOutcomes.Success,
+                                Subject: actor.PublicId is null
+                                    ? null
+                                    : new PlatformEventReferenceV1("user", actor.PublicId),
+                                Resource: new PlatformEventReferenceV1("platform_settings", "platform-settings")),
+                                token);
                         },
                         context.RequestAborted);
 

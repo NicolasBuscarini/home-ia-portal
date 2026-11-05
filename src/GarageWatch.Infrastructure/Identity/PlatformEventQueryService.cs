@@ -1,14 +1,17 @@
+using System.Diagnostics;
 using System.Text.Json;
 using GarageWatch.Application.PlatformEvents;
 using Microsoft.EntityFrameworkCore;
 
 namespace GarageWatch.Infrastructure.Identity;
 
-public sealed class PlatformEventQueryService(IamDbContext database) : IPlatformEventQueryService
+public sealed class PlatformEventQueryService(IamDbContext database, PlatformEventMetrics? metrics = null)
+    : IPlatformEventQueryService
 {
     public async Task<PlatformEventPage> ListAsync(PlatformEventQuery query,
         CancellationToken cancellationToken = default)
     {
+        var started = Stopwatch.GetTimestamp();
         var events = Filtered(query);
 
         if (query.Cursor is { } cursor)
@@ -49,17 +52,23 @@ public sealed class PlatformEventQueryService(IamDbContext database) : IPlatform
         var nextCursor = hasMore && page.Count > 0
             ? PlatformEventCursor.Encode(page[^1].OccurredAtUtc, page[^1].Id)
             : null;
+        metrics?.QueryObserved(Stopwatch.GetElapsedTime(started));
         return new PlatformEventPage(items, nextCursor);
     }
 
     public async Task<PlatformEventDetail?> GetAsync(string publicId,
         CancellationToken cancellationToken = default)
     {
+        var started = Stopwatch.GetTimestamp();
         var entity = await database.PlatformEvents.AsNoTracking()
             .Include(entry => entry.Actor)
             .Include(entry => entry.Subject)
             .SingleOrDefaultAsync(entry => entry.PublicId == publicId, cancellationToken);
-        if (entity is null) return null;
+        if (entity is null)
+        {
+            metrics?.QueryObserved(Stopwatch.GetElapsedTime(started));
+            return null;
+        }
 
         var actorPublicId = entity.Actor?.PublicId;
         var subjectPublicId = entity.Subject?.PublicId;
@@ -67,6 +76,8 @@ public sealed class PlatformEventQueryService(IamDbContext database) : IPlatform
         var integrityValid = entity.PayloadHash is { Length: 64 }
             && string.Equals(entity.PayloadHash,
                 PlatformEventCanonicalizer.ComputePayloadHash(value), StringComparison.OrdinalIgnoreCase);
+        if (!integrityValid) metrics?.IntegrityFailed();
+        metrics?.QueryObserved(Stopwatch.GetElapsedTime(started));
         var recorded = new PlatformEventRecordV1(
             entity.PublicId!, entity.RecordedAtUtc ?? entity.OccurredAtUtc,
             entity.PayloadHash ?? string.Empty, value);

@@ -785,6 +785,193 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.ToTable("IamMigrationStates");
                 });
 
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IdentityObservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BestPersonPublicId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("BestScore")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("CameraPublicId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("CandidateMargin")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("ClipPublicId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Dimensions")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EmbeddingSchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EvaluatedEnrollments")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("IngestedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LatestReviewPublicId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MatchStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ModelId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModelVersion")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ObservationHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ObservedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("PolicyMargin")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("PolicyThreshold")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("PolicyVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicId")
+                        .HasMaxLength(15)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResolvedPersonPublicId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ReviewStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SkippedEnrollments")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObservationHash")
+                        .IsUnique();
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("\"PublicId\" IS NOT NULL");
+
+                    b.HasIndex("CameraPublicId", "ObservedAtUtc");
+
+                    b.HasIndex("ReviewStatus", "IngestedAtUtc");
+
+                    b.ToTable("IdentityObservations");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IdentityObservationCandidate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ObservationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PersonPublicId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObservationId", "Rank")
+                        .IsUnique();
+
+                    b.ToTable("IdentityObservationCandidates");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IdentityObservationReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ObservationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicId")
+                        .HasMaxLength(15)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReviewerPublicId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ReviewerUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SelectedPersonPublicId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("\"PublicId\" IS NOT NULL");
+
+                    b.HasIndex("ObservationId", "CreatedAtUtc");
+
+                    b.ToTable("IdentityObservationReviews");
+                });
+
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IntegrationCredential", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1444,6 +1631,24 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IdentityObservationCandidate", b =>
+                {
+                    b.HasOne("GarageWatch.Infrastructure.Identity.IdentityObservation", null)
+                        .WithMany("Candidates")
+                        .HasForeignKey("ObservationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IdentityObservationReview", b =>
+                {
+                    b.HasOne("GarageWatch.Infrastructure.Identity.IdentityObservation", null)
+                        .WithMany("Reviews")
+                        .HasForeignKey("ObservationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IntegrationCredential", b =>
                 {
                     b.HasOne("GarageWatch.Infrastructure.Identity.ApplicationUser", "UpdatedBy")
@@ -1587,6 +1792,13 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.CameraContext", b =>
                 {
                     b.Navigation("Cameras");
+                });
+
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IdentityObservation", b =>
+                {
+                    b.Navigation("Candidates");
+
+                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.PortalModule", b =>

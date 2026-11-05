@@ -1,4 +1,5 @@
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Infrastructure.Identity.Repositories;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,7 +26,7 @@ public sealed record FaceExtractorSelectionResult(long Version, FaceExtractorCan
 public sealed class FaceExtractorConflictException(string code) : Exception(code);
 
 public sealed class FaceExtractorRegistryService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents, TimeProvider timeProvider, Biometrics.FaceExtractorRuntime runtime)
+    IPlatformEventRecorder recorder, TimeProvider timeProvider, Biometrics.FaceExtractorRuntime runtime)
 {
     public const string RegistryKey = "face-extractor";
     public const string AdapterContract = "face-embedding.v1";
@@ -75,8 +76,10 @@ public sealed class FaceExtractorRegistryService(IamDbContext database, IIamUnit
             };
             database.FaceExtractorCandidates.Add(candidate);
             await database.SaveChangesAsync(token);
-            auditEvents.Append(actorId, null, "face_extractor.candidate_created", candidate.PublicId,
-                candidate.CreatedAtUtc);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "face_extractor.candidate_created", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("face_extractor", candidate.PublicId!),
+                OccurredAtUtc: candidate.CreatedAtUtc), token);
             return Map(candidate);
         }, cancellationToken);
     }
@@ -111,8 +114,12 @@ public sealed class FaceExtractorRegistryService(IamDbContext database, IIamUnit
                 state.CandidateId = candidate.Id;
                 state.UpdatedAtUtc = now;
                 state.UpdatedByUserId = actorId;
-                auditEvents.Append(actorId, null, "face_extractor.selected_for_evaluation", candidate.PublicId, now);
+                await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                    "face_extractor.selected_for_evaluation", PlatformEventOutcomes.Success,
+                    Resource: new PlatformEventReferenceV1("face_extractor", candidate.PublicId!),
+                    OccurredAtUtc: now), token);
             }
+
             await database.SaveChangesAsync(token);
             return new(state!.Version, Map(candidate), RuntimeEnabled: runtime.Status.Enabled,
                 SampleCollectionEnabled: false, Runtime());

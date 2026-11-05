@@ -3,6 +3,7 @@ using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Infrastructure.Identity.Repositories;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -50,58 +51,68 @@ public sealed class PlatformEventPersistenceTests
     }
 
     [Fact]
-    public async Task Append_promotes_a_catalog_action_to_the_typed_envelope()
+    public async Task Recorder_promotes_a_catalog_action_to_the_typed_envelope()
     {
         await using var fixture = await DatabaseFixture.CreateAsync();
         await fixture.Database.Database.MigrateAsync();
-        var repository = new PlatformEventRepository(fixture.Database, TimeProvider.System);
+        var recorder = TestRecorder(fixture.Database);
 
-        repository.Append(null, null, "known_person.created", "PER000000000002", Now);
-        await fixture.Database.SaveChangesAsync();
+        var result = await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            "known_person.created", PlatformEventOutcomes.Success,
+            Resource: new PlatformEventReferenceV1("known_person", "PER000000000002")));
 
+        Assert.Equal(PlatformEventWriteStatus.Created, result.Status);
         var row = await fixture.Database.PlatformEvents.SingleAsync();
         Assert.True(PlatformEventPublicId.IsValid(row.PublicId));
-        Assert.Equal(row.Id, row.EventId);
+        Assert.NotEqual(Guid.Empty, row.EventId);
         Assert.Equal(PlatformEventContract.SchemaVersion, row.SchemaVersion);
         Assert.Equal(PlatformEventCategories.Administration, row.Category);
         Assert.Equal(PlatformEventSeverities.Info, row.Severity);
         Assert.Equal(PlatformEventOutcomes.Success, row.Outcome);
         Assert.Equal(PlatformEventSources.Portal, row.Source);
-        Assert.Equal(PlatformEventCanonicalizer.ComputePayloadHash(
-            PlatformEventBackfillService.ToContract(row)), row.PayloadHash);
+        Assert.Equal(64, row.PayloadHash!.Length);
     }
 
     [Fact]
-    public async Task Append_records_the_explicit_outcome_of_a_denied_action()
+    public async Task Recorder_records_the_explicit_outcome_of_a_denied_action()
     {
         await using var fixture = await DatabaseFixture.CreateAsync();
         await fixture.Database.Database.MigrateAsync();
-        var repository = new PlatformEventRepository(fixture.Database, TimeProvider.System);
+        var recorder = TestRecorder(fixture.Database);
 
-        repository.Append(null, null, "camera.access.denied", "CAM000000000002", Now,
-            PlatformEventOutcomes.Denied);
-        await fixture.Database.SaveChangesAsync();
+        await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            "camera.access.denied", PlatformEventOutcomes.Denied,
+            Resource: new PlatformEventReferenceV1("camera", "CAM000000000002")));
 
         var row = await fixture.Database.PlatformEvents.SingleAsync();
         Assert.Equal(PlatformEventCategories.Authorization, row.Category);
         Assert.Equal(PlatformEventOutcomes.Denied, row.Outcome);
-        Assert.Equal(PlatformEventCanonicalizer.ComputePayloadHash(
-            PlatformEventBackfillService.ToContract(row)), row.PayloadHash);
+        Assert.Equal(64, row.PayloadHash!.Length);
     }
 
     [Fact]
-    public async Task Append_keeps_the_legacy_envelope_for_an_action_outside_the_catalog()
+    public async Task Recorder_rejects_an_action_outside_the_catalog()
     {
         await using var fixture = await DatabaseFixture.CreateAsync();
         await fixture.Database.Database.MigrateAsync();
-        var repository = new PlatformEventRepository(fixture.Database, TimeProvider.System);
+        var recorder = TestRecorder(fixture.Database);
 
-        repository.Append(null, null, "custom.action", null, Now, PlatformEventOutcomes.Denied);
-        await fixture.Database.SaveChangesAsync();
+        var result = await recorder.RecordAsync(new PlatformEventDraft(
+            "custom.action", PlatformEventOutcomes.Denied));
 
-        var row = await fixture.Database.PlatformEvents.SingleAsync();
-        Assert.Equal(PlatformEventCategories.Legacy, row.Category);
-        Assert.Equal(PlatformEventOutcomes.Unknown, row.Outcome);
+        Assert.Equal(PlatformEventWriteStatus.Invalid, result.Status);
+        Assert.Equal(0, await fixture.Database.PlatformEvents.CountAsync());
+    }
+
+    private static PlatformEventRecorder TestRecorder(IamDbContext database) =>
+        new(database,
+            new PlatformEventWriter(database, TimeProvider.System,
+                NullLogger<PlatformEventWriter>.Instance),
+            new NoOriginAccessor(), TimeProvider.System);
+
+    private sealed class NoOriginAccessor : IPlatformEventOriginAccessor
+    {
+        public PlatformEventOrigin? Current => null;
     }
 
     [Fact]

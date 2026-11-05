@@ -44,9 +44,6 @@ public interface IPlatformEventRepository
 
     Task<RepositoryPage<PlatformEventRecord>> ListPaginatedAsync(int pageNumber, int pageSize,
         bool withDetails = false, CancellationToken cancellationToken = default);
-
-    void Append(Guid? actorUserId, Guid? subjectUserId, string action, string? resourceId,
-        DateTimeOffset occurredAtUtc, string? outcome = null);
 }
 
 public interface IIamUnitOfWork

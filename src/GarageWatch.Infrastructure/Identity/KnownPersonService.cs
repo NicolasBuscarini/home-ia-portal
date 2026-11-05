@@ -1,4 +1,5 @@
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.EntityFrameworkCore;
 using GarageWatch.Infrastructure.Identity.Repositories;
 
@@ -10,7 +11,7 @@ public sealed record KnownPersonPage(IReadOnlyList<KnownPersonSummary> Items, in
 public sealed record KnownPersonResult(string PublicId, string DisplayName, string Purpose,
     DateTimeOffset AuthorizationRecordedAtUtc, DateTimeOffset CreatedAtUtc, long Version);
 public sealed class KnownPersonService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds,
+    IPlatformEventRecorder recorder, TimeProvider timeProvider, IPublicIdGenerator publicIds,
     IBiometricPersonLinkStore links) : IKnownPeopleGateway
 {
     public async Task<KnownPersonResult> CreateAsync(Guid actorId, string? displayName, string? purpose,
@@ -39,7 +40,9 @@ public sealed class KnownPersonService(IamDbContext database, IIamUnitOfWork uni
                 Version = 1
             };
             database.KnownPeople.Add(person);
-            auditEvents.Append(actorId, null, "known_person.created", person.PublicId, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "known_person.created", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("known_person", person.PublicId!)), token);
             return person;
         }, cancellationToken);
         return Map(created);
@@ -87,7 +90,9 @@ public sealed class KnownPersonService(IamDbContext database, IIamUnitOfWork uni
             person.DeletedAtUtc = now;
             person.Version++;
             await links.UnlinkActiveForPersonAsync(publicId, now, token);
-            auditEvents.Append(actorId, null, "known_person.removed", publicId, now);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "known_person.removed", PlatformEventOutcomes.Success,
+                Resource: new PlatformEventReferenceV1("known_person", publicId)), token);
         }, cancellationToken);
 
     private static KnownPersonResult Map(KnownPerson person) => new(person.PublicId!, person.DisplayName!,

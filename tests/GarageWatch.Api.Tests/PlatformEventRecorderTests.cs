@@ -90,9 +90,68 @@ public sealed class PlatformEventRecorderTests
         Assert.Equal(0, await fixture.Database.PlatformEvents.CountAsync());
     }
 
+    [Fact]
+    public async Task Recorder_attributes_the_actor_from_the_explicit_execution_context_without_http_origin()
+    {
+        await using var fixture = await DatabaseFixture.CreateAsync();
+        await fixture.Database.Database.MigrateAsync();
+        var actorId = Guid.NewGuid();
+        fixture.Database.Users.Add(new ApplicationUser
+        {
+            Id = actorId,
+            UserName = "context-actor",
+            NormalizedUserName = "CONTEXT-ACTOR",
+            PublicId = "USR000000000098",
+            IsActive = true,
+            SecurityStamp = "context-security-stamp"
+        });
+        await fixture.Database.SaveChangesAsync();
+
+        var executionContext = new PlatformEventExecutionContext();
+        var recorder = new PlatformEventRecorder(fixture.Database,
+            new PlatformEventWriter(fixture.Database, TimeProvider.System,
+                NullLogger<PlatformEventWriter>.Instance),
+            new NullOriginAccessor(), TimeProvider.System, executionContext);
+
+        using (executionContext.BeginActor(actorId))
+        {
+            Assert.Equal(actorId, executionContext.Current?.UserId);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "user.roles.updated", PlatformEventOutcomes.Success));
+        }
+
+        Assert.Null(executionContext.Current);
+        var row = await fixture.Database.PlatformEvents.SingleAsync();
+        Assert.Equal(actorId, row.ActorUserId);
+        Assert.Null(row.SubjectUserId);
+    }
+
+    [Fact]
+    public async Task Recorder_leaves_the_actor_empty_without_origin_or_execution_context()
+    {
+        await using var fixture = await DatabaseFixture.CreateAsync();
+        await fixture.Database.Database.MigrateAsync();
+        var recorder = new PlatformEventRecorder(fixture.Database,
+            new PlatformEventWriter(fixture.Database, TimeProvider.System,
+                NullLogger<PlatformEventWriter>.Instance),
+            new NullOriginAccessor(), TimeProvider.System);
+
+        await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            "clip.retention.expired", PlatformEventOutcomes.Success));
+
+        var row = await fixture.Database.PlatformEvents.SingleAsync();
+        Assert.Null(row.ActorUserId);
+        Assert.Equal("clip.retention.expired", row.EventType);
+    }
+
     private sealed class StaticOriginAccessor(PlatformEventOrigin origin) : IPlatformEventOriginAccessor
     {
         public PlatformEventOrigin? Current { get; } = origin;
+    }
+
+    private sealed class NullOriginAccessor : IPlatformEventOriginAccessor
+    {
+        public PlatformEventOrigin? Current => null;
     }
 
     private sealed class DatabaseFixture : IAsyncDisposable
