@@ -47,6 +47,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly GarageWatch.Application.Monitoring.IMonitoringLiveClient? _monitoringLiveClient;
     private readonly GarageWatch.Application.Portal.IActivityWatchModule? _activityWatchModule;
     private readonly string _activityWatchBaseUrl;
+    private readonly int _eventIngestRateLimit;
 
     public ApiFactory(ISystemProfileSource? profileSource = null, ILoggerProvider? loggerProvider = null,
         string? databasePath = null,
@@ -72,7 +73,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         string monitoringBiometricsSource = "local",
         GarageWatch.Application.Monitoring.IMonitoringBiometricClient? monitoringBiometricClient = null,
         GarageWatch.Application.Portal.IActivityWatchModule? activityWatchModule = null,
-        string activityWatchBaseUrl = "http://activitywatch.invalid")
+        string activityWatchBaseUrl = "http://activitywatch.invalid",
+        int eventIngestRateLimit = 120)
     {
         _profileSource = profileSource;
         _loggerProvider = loggerProvider;
@@ -107,6 +109,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         _monitoringBiometricClient = monitoringBiometricClient;
         _activityWatchModule = activityWatchModule;
         _activityWatchBaseUrl = activityWatchBaseUrl;
+        _eventIngestRateLimit = eventIngestRateLimit;
     }
 
     public string DatabasePath => _databasePath;
@@ -135,6 +138,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["MONITORING_BASE_URL"] = "http://monitoring.invalid",
             ["MONITORING_SERVICE_TOKEN_SECRET"] = "test-monitoring-service-secret-0123456789abcdef",
             ["ACTIVITYWATCH_BASE_URL"] = _activityWatchBaseUrl,
+            ["EVENT_INGEST_RATE_LIMIT_PER_MINUTE"] = _eventIngestRateLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["CREDENTIAL_ENCRYPTION_KEY"] = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
             ["CREDENTIAL_ENCRYPTION_KEY_VERSION"] = "v1"
         }));

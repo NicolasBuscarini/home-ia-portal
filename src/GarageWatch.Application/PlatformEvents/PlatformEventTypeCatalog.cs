@@ -168,6 +168,8 @@ public sealed class PlatformEventTypeCatalog
         new("integration_credential.removed", PlatformEventCategories.Integration,
             PlatformEventSeverities.Warning, []),
         new("integration_credential.rotated", PlatformEventCategories.Integration,
-            PlatformEventSeverities.Info, [])
+            PlatformEventSeverities.Info, []),
+        new("navigation.viewed", PlatformEventCategories.Navigation, PlatformEventSeverities.Info, []),
+        new("ui.action", PlatformEventCategories.Navigation, PlatformEventSeverities.Info, [])
     ];
 }

@@ -1,3 +1,4 @@
+using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Application.Profiles;
 using GarageWatch.Application.Identity;
 using GarageWatch.Application.Cameras;
@@ -120,8 +121,12 @@ public static class DependencyInjection
         services.AddScoped<IIamUnitOfWork, IamUnitOfWork>();
         services.AddScoped<ICameraAccessGrantRepository, CameraAccessGrantRepository>();
         services.AddScoped<IPlatformEventRepository, PlatformEventRepository>();
+        services.AddScoped<IPlatformEventWriter, PlatformEventWriter>();
         services.AddScoped<PlatformEventBackfillService>();
         services.AddScoped<PlatformEventRetentionService>();
+        services.AddSingleton(provider => PlatformEventServiceTokenOptions.FromConfiguration(
+            provider.GetRequiredService<IConfiguration>()));
+        services.AddSingleton<PlatformEventServiceTokenValidator>();
         services.AddScoped(provider => IdentityBootstrapOptions.FromConfiguration(
             provider.GetRequiredService<IConfiguration>()));
         var captureOptions = CaptureOptions.FromEnvironment(configuration);

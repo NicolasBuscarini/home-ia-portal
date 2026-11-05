@@ -41,10 +41,11 @@ public sealed class OpenApiEndpointTests
 
         var operations = json.RootElement.GetProperty("paths").EnumerateObject()
             .SelectMany(path => path.Value.EnumerateObject().Select(method => method.Value)).ToArray();
-        Assert.Equal(75, operations.Length);
+        Assert.Equal(76, operations.Length);
         var operationIds = operations.Select(operation => operation.GetProperty("operationId").GetString()).ToArray();
         Assert.Equal(operationIds.Length, operationIds.Distinct(StringComparer.Ordinal).Count());
         Assert.Contains("GetPortalHealth", operationIds);
+        Assert.Contains("CreatePlatformEvent", operationIds);
         Assert.All(operations, operation =>
         {
             Assert.False(string.IsNullOrWhiteSpace(operation.GetProperty("operationId").GetString()));
@@ -57,7 +58,7 @@ public sealed class OpenApiEndpointTests
         });
 
         var requestBodies = operations.Where(operation => operation.TryGetProperty("requestBody", out _)).ToArray();
-        Assert.Equal(29, requestBodies.Length);
+        Assert.Equal(30, requestBodies.Length);
         Assert.All(requestBodies, operation =>
         {
             var body = operation.GetProperty("requestBody");

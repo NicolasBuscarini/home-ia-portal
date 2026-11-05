@@ -3,6 +3,7 @@ using GarageWatch.Api.Security;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
 
 namespace GarageWatch.Api.Endpoints.Authentication;
 
@@ -31,7 +32,7 @@ public sealed class LoginEndpoint() : BaseEndpoint("Authentication", "Login", "C
                 IsPersistent = true,
                 IssuedUtc = issuedAt,
                 ExpiresUtc = issuedAt.Add(SessionPolicy.Lifetime)
-            }, additionalClaims: []);
+            }, additionalClaims: [new Claim("session_id", Guid.NewGuid().ToString("N"))]);
             return Results.NoContent();
         }).AllowAnonymous().RequireRateLimiting("login")
             .Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)

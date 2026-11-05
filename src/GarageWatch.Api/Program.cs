@@ -78,9 +78,19 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Administrator", policy => policy.RequireRole("Administrator"));
     options.AddPolicy("User", policy => policy.RequireRole("User"));
 });
+var eventIngestLimit = 120;
+var rawEventIngestLimit = builder.Configuration["EVENT_INGEST_RATE_LIMIT_PER_MINUTE"];
+if (!string.IsNullOrWhiteSpace(rawEventIngestLimit) &&
+    (!int.TryParse(rawEventIngestLimit, out eventIngestLimit) || eventIngestLimit is < 1 or > 10000))
+    throw new InvalidOperationException("EVENT_INGEST_RATE_LIMIT_PER_MINUTE fora do limite permitido.");
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = (context, _) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        return ValueTask.CompletedTask;
+    };
     options.AddFixedWindowLimiter("login", limiter =>
     {
         limiter.PermitLimit = 5;
@@ -102,6 +112,24 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
             AutoReplenishment = true
         }));
+    options.AddPolicy("events-ingest", context =>
+    {
+        var raw = context.RequestServices.GetRequiredService<IConfiguration>()["EVENT_INGEST_RATE_LIMIT_PER_MINUTE"];
+        var permitLimit = 120;
+        if (!string.IsNullOrWhiteSpace(raw) &&
+            (!int.TryParse(raw, out permitLimit) || permitLimit is < 1 or > 10000))
+            throw new InvalidOperationException("EVENT_INGEST_RATE_LIMIT_PER_MINUTE fora do limite permitido.");
+        return RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
 });
 builder.Services.AddPlatformObservability(builder.Configuration, builder.Environment);
 OpenApiConfiguration.AddDocumentation(builder.Services, builder.Environment);
