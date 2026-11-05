@@ -98,6 +98,16 @@ public sealed class MonitoringAnalysisDispatchTests
             Assert.Empty(await scope.ServiceProvider.GetRequiredService<IamDbContext>().ClipAnalysisJobs
                 .ToArrayAsync());
 
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
+            var recorded = await database.PlatformEvents.AsNoTracking()
+                .SingleAsync(entry => entry.EventType == "clip.analysis.request.accepted");
+            Assert.Equal("success", recorded.Outcome);
+            Assert.Equal("clip", recorded.ResourceType);
+            Assert.Equal(clip.PublicId, recorded.ResourceId);
+            Assert.NotNull(recorded.ActorUserId);
+        }
     }
 
     [Fact]

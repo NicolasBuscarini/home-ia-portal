@@ -53,6 +53,10 @@ public static class ApiEndpointRegistration
             new Biometrics.ListIdentityObservationsEndpoint(),
             new Biometrics.GetIdentityObservationEndpoint(),
             new Biometrics.ReviewIdentityObservationEndpoint(),
+            new Biometrics.GetIdentityCalibrationEndpoint(),
+            new Biometrics.CreateIdentityMatchPolicyDraftEndpoint(),
+            new Biometrics.ListIdentityMatchPolicyVersionsEndpoint(),
+            new Biometrics.PromoteIdentityMatchPolicyVersionEndpoint(),
             new Live.GetPlaylistEndpoint(), new Live.GetSegmentEndpoint(),
             new System.GetSystemProfileEndpoint()
         ];

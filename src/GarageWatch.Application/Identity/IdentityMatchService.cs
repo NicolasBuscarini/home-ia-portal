@@ -4,7 +4,8 @@ namespace GarageWatch.Application.Identity;
 /// Composes the embedding source with the pure matcher and guarantees that decrypted vectors are
 /// cleared from memory after scoring. It does not persist observations, suggestions or reviews.
 /// </summary>
-public sealed class IdentityMatchService(IIdentityEmbeddingSource source, IIdentityMatcher matcher)
+public sealed class IdentityMatchService(IIdentityEmbeddingSource source, IIdentityMatcher matcher,
+    IIdentityMatchPolicySource policies)
 {
     public async Task<IdentityMatchSuggestion> MatchAsync(FaceObservationV1 observation,
         CancellationToken cancellationToken = default)
@@ -12,10 +13,11 @@ public sealed class IdentityMatchService(IIdentityEmbeddingSource source, IIdent
         ArgumentNullException.ThrowIfNull(observation);
         if (!observation.IsValid) throw new ArgumentException("invalid_face_observation", nameof(observation));
 
+        var policy = await policies.GetActiveAsync(cancellationToken);
         var snapshot = await source.LoadAsync(observation, cancellationToken);
         try
         {
-            var result = matcher.Match(observation, snapshot.Candidates, IdentityMatchPolicy.Baseline);
+            var result = matcher.Match(observation, snapshot.Candidates, policy);
             return result with
             {
                 SkippedEnrollments = result.SkippedEnrollments + snapshot.SkippedEnrollments

@@ -102,6 +102,10 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
             var job = await RemoteClient.EnqueueAsync(new MonitoringAnalysisEnqueue(clip.ClipId, clip.PublicId!,
                     scope.CameraId, scope.ContextId, idempotencyKey, analysisVersion, "manual"),
                 cancellationToken) ?? throw new MonitoringAnalysisUnavailableException();
+            if (!job.Existing)
+                await unitOfWork.ExecuteAtomicallyAsync(async token =>
+                    await AuditAsync(actorId, "clip.analysis.request.accepted", clipId, null, token),
+                    cancellationToken);
             return new ClipAnalysisJobResult(job.PublicId, job.ClipPublicId, job.AnalysisVersion, job.State,
                 job.Existing);
         }

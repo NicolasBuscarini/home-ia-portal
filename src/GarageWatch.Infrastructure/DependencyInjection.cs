@@ -97,6 +97,8 @@ public static class DependencyInjection
                 ? provider.GetRequiredService<LocalIdentityEmbeddingSource>()
                 : provider.GetRequiredService<RemoteIdentityEmbeddingSource>());
         services.AddScoped<IdentityMatchService>();
+        services.AddScoped<IIdentityMatchPolicySource, IdentityMatchPolicySource>();
+        services.AddScoped<IdentityCalibrationService>();
         services.AddScoped<IdentityTriageService>();
         services.AddScoped<LocalBiometricEnrollmentGateway>();
         services.AddScoped<RemoteBiometricEnrollmentGateway>();

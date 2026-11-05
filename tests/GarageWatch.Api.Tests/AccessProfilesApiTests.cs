@@ -212,6 +212,100 @@ public sealed class AccessProfilesApiTests
         Assert.Equal(HttpStatusCode.NotFound, deniedMedia.StatusCode);
     }
 
+    [Fact]
+    public async Task Delegated_manager_cannot_assign_a_permission_or_scope_they_do_not_hold()
+    {
+        await using var factory = new ApiFactory();
+        string cameraPublicId;
+        string contextPublicId;
+        string managerPublicId;
+        string targetPublicId;
+        string managerVersionPublicId;
+        string managerProfilePublicId;
+        string liveVersionPublicId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var services = scope.ServiceProvider;
+            var users = services.GetRequiredService<UserManager<ApplicationUser>>();
+            var database = services.GetRequiredService<IamDbContext>();
+            var cameraId = services.GetRequiredService<CaptureOptions>().CameraId;
+            var camera = await database.CameraCatalog.Include(item => item.Context)
+                .SingleAsync(item => item.CameraId == cameraId);
+            cameraPublicId = camera.PublicId!;
+            contextPublicId = camera.Context.PublicId!;
+            var managerUser = new ApplicationUser { Id = Guid.NewGuid(), UserName = "delegated-manager", IsActive = true };
+            Assert.True((await users.CreateAsync(managerUser, "Manager-Password-123!")).Succeeded);
+            Assert.True((await users.AddToRoleAsync(managerUser, "User")).Succeeded);
+            managerPublicId = managerUser.PublicId!;
+            var target = new ApplicationUser { Id = Guid.NewGuid(), UserName = "delegated-target", IsActive = true };
+            Assert.True((await users.CreateAsync(target, "Target-Password-123!")).Succeeded);
+            Assert.True((await users.AddToRoleAsync(target, "User")).Succeeded);
+            targetPublicId = target.PublicId!;
+        }
+
+        using var admin = await LoginAsync(factory, "contract-user", "Contract-Password-123!");
+        admin.DefaultRequestHeaders.Add("Origin", "http://localhost");
+        using var createManagerProfile = await admin.PostAsJsonAsync("/api/v1/admin/access-rules",
+            new { name = "Gestor de usuários", permissionKeys = new[] { "admin.users.manage" } });
+        Assert.Equal(HttpStatusCode.Created, createManagerProfile.StatusCode);
+        var managerProfile = await createManagerProfile.Content.ReadFromJsonAsync<JsonElement>();
+        managerProfilePublicId = managerProfile.GetProperty("publicId").GetString()!;
+        managerVersionPublicId = managerProfile.GetProperty("currentVersionPublicId").GetString()!;
+        using var createLiveProfile = await admin.PostAsJsonAsync("/api/v1/admin/access-rules",
+            new { name = "Live visível", permissionKeys = new[] { "live.video.view" } });
+        Assert.Equal(HttpStatusCode.Created, createLiveProfile.StatusCode);
+        var liveProfile = await createLiveProfile.Content.ReadFromJsonAsync<JsonElement>();
+        liveVersionPublicId = liveProfile.GetProperty("currentVersionPublicId").GetString()!;
+
+        using var grantManager = await admin.PutAsJsonAsync(
+            $"/api/v1/admin/users/{managerPublicId}/access-rules", new
+            {
+                assignments = new[]
+                {
+                    new { profileVersionPublicId = managerVersionPublicId, scopes = new[] { new { kind = "global" } } }
+                }
+            });
+        Assert.Equal(HttpStatusCode.NoContent, grantManager.StatusCode);
+
+        using var managerClient = await LoginAsync(factory, "delegated-manager", "Manager-Password-123!");
+        managerClient.DefaultRequestHeaders.Add("Origin", "http://localhost");
+        using var escalate = await managerClient.PutAsJsonAsync(
+            $"/api/v1/admin/users/{targetPublicId}/access-rules", new
+            {
+                assignments = new[]
+                {
+                    new
+                    {
+                        profileVersionPublicId = liveVersionPublicId,
+                        scopes = new[] { new { contextId = contextPublicId, cameraId = cameraPublicId } }
+                    }
+                }
+            });
+        Assert.Equal(HttpStatusCode.Forbidden, escalate.StatusCode);
+        using (var validation = factory.Services.CreateScope())
+        {
+            var database = validation.ServiceProvider.GetRequiredService<IamDbContext>();
+            var targetId = await database.Users.Where(item => item.PublicId == targetPublicId)
+                .Select(item => item.Id).SingleAsync();
+            Assert.False(await database.UserAccessProfileAssignments
+                .AnyAsync(item => item.UserId == targetId && item.RevokedAtUtc == null));
+        }
+
+        using var allowed = await managerClient.PutAsJsonAsync(
+            $"/api/v1/admin/users/{targetPublicId}/access-rules", new
+            {
+                assignments = new[]
+                {
+                    new { profileVersionPublicId = managerVersionPublicId, scopes = new[] { new { kind = "global" } } }
+                }
+            });
+        Assert.Equal(HttpStatusCode.NoContent, allowed.StatusCode);
+        using var detail = await admin.GetAsync($"/api/v1/admin/users/{targetPublicId}");
+        var detailJson = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(managerProfilePublicId, detailJson.GetProperty("accessProfiles")[0]
+            .GetProperty("profilePublicId").GetString());
+    }
+
     private static async Task<HttpClient> LoginAsync(ApiFactory factory, string username, string password)
     {
         var client = factory.CreateClient();

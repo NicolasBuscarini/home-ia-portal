@@ -67,6 +67,27 @@ public sealed class PlatformEventIngestionTests
     }
 
     [Fact]
+    public async Task Session_ingests_ui_action_with_allowlisted_action_metadata()
+    {
+        using var factory = new ApiFactory();
+        using var client = await LoggedInClient(factory);
+
+        using var response = await client.PostAsJsonAsync("/api/v1/events",
+            BrowserEvent(eventType: "ui.action", metadata: new { action = "clip.download" }));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<PlatformEventCreatedResponse>();
+        Assert.NotNull(created);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
+        var row = await database.PlatformEvents.AsNoTracking()
+            .SingleAsync(entry => entry.PublicId == created!.PublicId);
+        Assert.Equal("ui.action", row.EventType);
+        Assert.Contains("clip.download", row.MetadataJson ?? string.Empty);
+    }
+
+    [Fact]
     public async Task Session_cannot_forge_actor_emitter_or_non_ui_type()
     {
         using var factory = new ApiFactory();
@@ -213,26 +234,31 @@ public sealed class PlatformEventIngestionTests
         return client;
     }
 
-    private static object BrowserEvent(string eventType = "navigation.viewed",
+    private static Dictionary<string, object?> BrowserEvent(string eventType = "navigation.viewed",
         string category = "navigation", string emitter = "browser", object? actor = null,
-        string? requestId = null, string? correlationId = null) => new
+        string? requestId = null, string? correlationId = null, object? metadata = null)
+    {
+        var body = new Dictionary<string, object?>
         {
-            schemaVersion = "1.0",
-            eventId = Guid.NewGuid(),
-            eventType,
-            category,
-            severity = "info",
-            outcome = "success",
-            occurredAtUtc = DateTimeOffset.UtcNow,
-            source = "shell",
-            emitter,
-            actor,
-            correlationId,
-            requestId,
-            traceId = new string('a', 32),
-            spanId = new string('b', 16),
-            client = new { browser = "Firefox", os = "Linux", device = "desktop" }
+            ["schemaVersion"] = "1.0",
+            ["eventId"] = Guid.NewGuid(),
+            ["eventType"] = eventType,
+            ["category"] = category,
+            ["severity"] = "info",
+            ["outcome"] = "success",
+            ["occurredAtUtc"] = DateTimeOffset.UtcNow,
+            ["source"] = "shell",
+            ["emitter"] = emitter,
+            ["actor"] = actor,
+            ["correlationId"] = correlationId,
+            ["requestId"] = requestId,
+            ["traceId"] = new string('a', 32),
+            ["spanId"] = new string('b', 16),
+            ["client"] = new { browser = "Firefox", os = "Linux", device = "desktop" }
         };
+        if (metadata is not null) body["metadata"] = metadata;
+        return body;
+    }
 
     private static object ServiceEvent(Guid? eventId = null, DateTimeOffset? occurredAt = null,
         string eventType = "clip.preserved", string source = "monitoring",

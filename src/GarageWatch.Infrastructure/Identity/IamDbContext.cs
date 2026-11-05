@@ -46,6 +46,7 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
     public DbSet<IdentityObservation> IdentityObservations => Set<IdentityObservation>();
     public DbSet<IdentityObservationCandidate> IdentityObservationCandidates => Set<IdentityObservationCandidate>();
     public DbSet<IdentityObservationReview> IdentityObservationReviews => Set<IdentityObservationReview>();
+    public DbSet<IdentityMatchPolicyVersion> IdentityMatchPolicyVersions => Set<IdentityMatchPolicyVersion>();
     public DbSet<FaceExtractorCandidate> FaceExtractorCandidates => Set<FaceExtractorCandidate>();
     public DbSet<FaceExtractorSelection> FaceExtractorSelections => Set<FaceExtractorSelection>();
     public DbSet<ClipRetentionPolicy> ClipRetentionPolicies => Set<ClipRetentionPolicy>();
@@ -372,6 +373,21 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
             entity.HasOne<IdentityObservation>().WithMany(item => item.Reviews)
                 .HasForeignKey(review => review.ObservationId).OnDelete(DeleteBehavior.Cascade);
             ConfigurePublicId(entity, PublicIdPrefixes.IdentityReviewPrefix);
+        });
+        builder.Entity<IdentityMatchPolicyVersion>(entity =>
+        {
+            entity.HasKey(version => version.Id);
+            entity.Property(version => version.SnapshotHash).HasMaxLength(64).IsRequired();
+            entity.Property(version => version.CameraPublicId).HasMaxLength(32);
+            entity.Property(version => version.CreatedByPublicId).HasMaxLength(32).IsRequired();
+            entity.Property(version => version.PromotedByPublicId).HasMaxLength(32);
+            entity.Property(version => version.FromUtc).HasConversion(UtcTicksConverter);
+            entity.Property(version => version.ToUtc).HasConversion(UtcTicksConverter);
+            entity.Property(version => version.CreatedAtUtc).HasConversion(UtcTicksConverter);
+            entity.Property(version => version.PromotedAtUtc).HasConversion(NullableUtcTicksConverter);
+            entity.HasIndex(version => version.Version).IsUnique();
+            entity.HasIndex(version => version.Status).IsUnique().HasFilter("\"Status\" = 1");
+            ConfigurePublicId(entity, PublicIdPrefixes.IdentityMatchPolicyPrefix);
         });
         builder.Entity<FaceExtractorCandidate>(entity =>
         {

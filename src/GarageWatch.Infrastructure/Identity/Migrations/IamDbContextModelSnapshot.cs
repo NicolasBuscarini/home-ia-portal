@@ -785,6 +785,89 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.ToTable("IamMigrationStates");
                 });
 
+            modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IdentityMatchPolicyVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CameraPublicId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreatedByPublicId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("EstimatedFar")
+                        .HasColumnType("REAL");
+
+                    b.Property<double?>("EstimatedFrr")
+                        .HasColumnType("REAL");
+
+                    b.Property<int>("ExcludedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FromUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GenuineCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ImpostorCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("Margin")
+                        .HasColumnType("REAL");
+
+                    b.Property<long?>("PromotedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PromotedByPublicId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicId")
+                        .HasMaxLength(15)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("Threshold")
+                        .HasColumnType("REAL");
+
+                    b.Property<long>("ToUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasFilter("\"PublicId\" IS NOT NULL");
+
+                    b.HasIndex("Status")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 1");
+
+                    b.HasIndex("Version")
+                        .IsUnique();
+
+                    b.ToTable("IdentityMatchPolicyVersions");
+                });
+
             modelBuilder.Entity("GarageWatch.Infrastructure.Identity.IdentityObservation", b =>
                 {
                     b.Property<Guid>("Id")
