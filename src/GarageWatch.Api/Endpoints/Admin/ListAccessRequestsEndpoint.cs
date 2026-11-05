@@ -1,6 +1,8 @@
 using GarageWatch.Api.Endpoints;
 using GarageWatch.Infrastructure.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class ListAccessRequestsEndpoint() : BaseEndpoint("User administration", "AdminListAccessRequests",
@@ -18,7 +20,7 @@ public sealed class ListAccessRequestsEndpoint() : BaseEndpoint("User administra
             {
                 return Results.BadRequest(new ApiErrorResponse("invalid_pagination"));
             }
-        }).RequireAuthorization("Administrator").Produces<AccessRequestPage>(StatusCodes.Status200OK)
+        }).RequireAuthorization(PermissionPolicy.Name("admin.requests.read")).Produces<AccessRequestPage>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }

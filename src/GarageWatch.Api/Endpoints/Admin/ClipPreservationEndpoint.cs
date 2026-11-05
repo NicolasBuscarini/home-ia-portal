@@ -5,6 +5,8 @@ using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class UpdateClipPreservationEndpoint() : BaseEndpoint("Clip preservation", "UpdateClipPreservation",
@@ -27,7 +29,7 @@ public sealed class UpdateClipPreservationEndpoint() : BaseEndpoint("Clip preser
             catch (KeyNotFoundException) { return Results.NotFound(); }
             catch (ClipRetentionConflictException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
             catch (MonitoringRetentionUnavailableException) { return Results.Json(new ApiErrorResponse("monitoring_retention_unavailable"), statusCode: StatusCodes.Status503ServiceUnavailable); }
-        }).RequireAuthorization("Administrator").Produces<ClipPreservationSettings>()
+        }).RequireAuthorization(PermissionPolicy.Name("admin.retention.manage")).Produces<ClipPreservationSettings>()
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);

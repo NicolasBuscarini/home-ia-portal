@@ -5,6 +5,8 @@ using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class LinkBiometricPersonEndpoint() : BaseEndpoint("Biometrics", "AdminLinkBiometricPerson",
@@ -44,7 +46,7 @@ public sealed class LinkBiometricPersonEndpoint() : BaseEndpoint("Biometrics", "
                     return Results.Json(new ApiErrorResponse("monitoring_roster_unavailable"),
                         statusCode: StatusCodes.Status503ServiceUnavailable);
                 }
-            }).RequireAuthorization("Administrator")
+            }).RequireAuthorization(PermissionPolicy.Name("admin.people.manage"))
             .Produces<BiometricPersonLinkResponse>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
@@ -73,7 +75,7 @@ public sealed class UnlinkBiometricPersonEndpoint() : BaseEndpoint("Biometrics",
                 {
                     return Results.NotFound(new ApiErrorResponse("biometric_person_link_target_not_found"));
                 }
-            }).RequireAuthorization("Administrator")
+            }).RequireAuthorization(PermissionPolicy.Name("admin.people.manage"))
             .Produces(StatusCodes.Status204NoContent)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);

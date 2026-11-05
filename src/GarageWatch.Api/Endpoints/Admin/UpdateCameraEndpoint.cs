@@ -5,6 +5,8 @@ using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class UpdateCameraEndpoint() : BaseEndpoint("Camera administration", "AdminUpdateCamera",
@@ -28,7 +30,7 @@ public sealed class UpdateCameraEndpoint() : BaseEndpoint("Camera administration
             {
                 return EndpointSecurity.CatalogError(exception);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.cameras.manage"))
             .Produces<CameraCatalogRecord>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)

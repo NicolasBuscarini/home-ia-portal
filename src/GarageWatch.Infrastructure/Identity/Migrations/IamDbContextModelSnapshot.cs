@@ -1196,6 +1196,14 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                     b.Property<Guid>("AssignmentId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ScopeKind")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModuleId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ContextId")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -1204,7 +1212,7 @@ namespace GarageWatch.Infrastructure.Identity.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.HasKey("AssignmentId", "ContextId", "CameraId");
+                    b.HasKey("AssignmentId", "ScopeKind", "ModuleId", "ContextId", "CameraId");
 
                     b.ToTable("UserAccessProfileScopes");
                 });

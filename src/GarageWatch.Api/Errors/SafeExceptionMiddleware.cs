@@ -21,6 +21,7 @@ public sealed class SafeExceptionMiddleware(RequestDelegate next)
         catch (Exception exception)
         {
             logger.LogCritical(
+                exception,
                 "Falha inesperada na requisição. Tipo={FailureType}",
                 exception.GetType().Name);
 

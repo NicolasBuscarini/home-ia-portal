@@ -3,6 +3,8 @@ using GarageWatch.Api.Endpoints;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class ReviewAccessRequestEndpoint() : BaseEndpoint("User administration", "AdminReviewAccessRequest",
@@ -33,7 +35,7 @@ public sealed class ReviewAccessRequestEndpoint() : BaseEndpoint("User administr
             {
                 return Results.Forbid();
             }
-        }).RequireAuthorization("Administrator").Produces(StatusCodes.Status204NoContent)
+        }).RequireAuthorization(PermissionPolicy.Name("admin.requests.manage")).Produces(StatusCodes.Status204NoContent)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }

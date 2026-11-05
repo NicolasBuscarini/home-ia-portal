@@ -4,6 +4,8 @@ using GarageWatch.Api.Errors;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class GetClipTriggerConfigurationEndpoint() : BaseEndpoint("Clip trigger", "GetClipTriggerConfiguration",
@@ -15,7 +17,7 @@ public sealed class GetClipTriggerConfigurationEndpoint() : BaseEndpoint("Clip t
         {
             try { return Results.Ok(await configuration.GetAsync(cameraId, cancellationToken)); }
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("camera_not_found")); }
-        }).RequireAuthorization("Administrator").Produces<CameraClipTriggerConfiguration>()
+        }).RequireAuthorization(PermissionPolicy.Name("admin.capture.manage")).Produces<CameraClipTriggerConfiguration>()
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound).Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden);
 }
@@ -40,7 +42,7 @@ public sealed class UpdateClipTriggerConfigurationEndpoint() : BaseEndpoint("Cli
             catch (ArgumentException) { return Results.BadRequest(new ApiErrorResponse("invalid_clip_trigger_configuration")); }
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("camera_not_found")); }
             catch (ClipTriggerConfigurationConflictException) { return Results.Conflict(new ApiErrorResponse("clip_trigger_version_conflict")); }
-        }).RequireAuthorization("Administrator").Produces<CameraClipTriggerConfiguration>()
+        }).RequireAuthorization(PermissionPolicy.Name("admin.capture.manage")).Produces<CameraClipTriggerConfiguration>()
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest).Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict).Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden);

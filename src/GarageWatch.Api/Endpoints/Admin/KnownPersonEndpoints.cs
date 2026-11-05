@@ -4,6 +4,8 @@ using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class ListKnownPeopleEndpoint() : BaseEndpoint("Known people", "AdminListKnownPeople",
@@ -28,7 +30,7 @@ public sealed class ListKnownPeopleEndpoint() : BaseEndpoint("Known people", "Ad
                 return Results.Json(new ApiErrorResponse("monitoring_roster_unavailable"),
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.people.manage"))
             .Produces<KnownPersonPageResponse>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
@@ -58,7 +60,7 @@ public sealed class CreateKnownPersonEndpoint() : BaseEndpoint("Known people", "
                 return Results.Json(new ApiErrorResponse("monitoring_roster_unavailable"),
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.people.manage"))
             .Produces<KnownPersonResult>(StatusCodes.Status201Created)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
@@ -87,7 +89,7 @@ public sealed class RemoveKnownPersonEndpoint() : BaseEndpoint("Known people", "
                 return Results.Json(new ApiErrorResponse("monitoring_roster_unavailable"),
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.people.manage"))
             .Produces(StatusCodes.Status204NoContent)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)

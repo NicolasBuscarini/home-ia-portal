@@ -2,6 +2,8 @@ using GarageWatch.Api.Endpoints;
 using GarageWatch.Application.Cameras;
 using GarageWatch.Infrastructure.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class ListCamerasEndpoint() : BaseEndpoint("Camera administration", "AdminListCameras",
@@ -15,7 +17,7 @@ public sealed class ListCamerasEndpoint() : BaseEndpoint("Camera administration"
                 return Results.BadRequest(new ApiErrorResponse("invalid_context_id"));
             return Results.Ok(await catalog.ListCamerasAsync(page ?? 1, pageSize ?? 50, contextId, cancellationToken));
         })
-            .RequireAuthorization("Administrator")
+            .RequireAuthorization(PermissionPolicy.Name("admin.cameras.read"))
             .Produces<CatalogPage<CameraCatalogRecord>>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);

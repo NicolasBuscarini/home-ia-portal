@@ -1,6 +1,8 @@
 using GarageWatch.Api.Endpoints;
 using GarageWatch.Infrastructure.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class ListAccessProfilesEndpoint() : BaseEndpoint("Access profiles", "AdminListAccessProfiles",
@@ -9,7 +11,7 @@ public sealed class ListAccessProfilesEndpoint() : BaseEndpoint("Access profiles
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/admin/access-rules", async (AccessProfileService profiles,
             CancellationToken cancellationToken) => Results.Ok(await profiles.ListAsync(cancellationToken)))
-            .RequireAuthorization("Administrator")
+            .RequireAuthorization(PermissionPolicy.Name("admin.permissions.read"))
             .Produces<IReadOnlyList<AccessProfileSummary>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }

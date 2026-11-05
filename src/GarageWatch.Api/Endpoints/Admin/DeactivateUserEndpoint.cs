@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class DeactivateUserEndpoint() : BaseEndpoint("User administration", "AdminDeactivateUser",
@@ -32,7 +34,7 @@ public sealed class DeactivateUserEndpoint() : BaseEndpoint("User administration
             {
                 return EndpointSecurity.AdminIdentityError(exception);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.users.manage"))
             .Produces(StatusCodes.Status204NoContent)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)

@@ -5,6 +5,8 @@ using GarageWatch.Application.Identity;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed record UpdatePlatformSettingsRequest(int ExpectedVersion, PlatformSettingsValues Values);
@@ -20,7 +22,7 @@ public sealed class GetPlatformSettingsEndpoint()
         routes.MapGet(
                 "/api/v1/admin/platform-settings",
                 (IConfiguration configuration) => Results.Ok(PlatformSettingsFile.LoadOrCreate(configuration)))
-            .RequireAuthorization("Administrator")
+            .RequireAuthorization(PermissionPolicy.Name("admin.configuration.manage"))
             .Produces<PlatformSettingsDocument>();
 }
 
@@ -82,7 +84,7 @@ public sealed class UpdatePlatformSettingsEndpoint()
 
                     return Results.Ok(updated);
                 })
-            .RequireAuthorization("Administrator")
+            .RequireAuthorization(PermissionPolicy.Name("admin.configuration.manage"))
             .Produces<PlatformSettingsDocument>()
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict);

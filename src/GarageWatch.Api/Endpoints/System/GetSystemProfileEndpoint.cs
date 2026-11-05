@@ -4,6 +4,8 @@ using GarageWatch.Api.Contracts;
 using GarageWatch.Application.Profiles;
 using MediatR;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.System;
 
 public sealed class GetSystemProfileEndpoint() : BaseEndpoint("System", "GetSystemProfile",
@@ -16,7 +18,7 @@ public sealed class GetSystemProfileEndpoint() : BaseEndpoint("System", "GetSyst
             var profile = await mediator.Send(new GetSystemProfileQuery(), cancellationToken);
             return Results.Ok(new SystemProfileResponseV1("1.0", correlation.CorrelationId,
                 profile.ServiceName, profile.Environment, profile.ApplicationVersion));
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.system.health.read"))
             .Produces<SystemProfileResponseV1>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }

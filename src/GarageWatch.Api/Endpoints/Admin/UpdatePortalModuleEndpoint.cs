@@ -4,6 +4,8 @@ using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class UpdatePortalModuleEndpoint() : BaseEndpoint("Portal administration", "AdminUpdatePortalModule",
@@ -34,7 +36,7 @@ public sealed class UpdatePortalModuleEndpoint() : BaseEndpoint("Portal administ
             {
                 return EndpointSecurity.PortalError(exception);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.modules.manage"))
             .Produces<PortalModuleRecord>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)

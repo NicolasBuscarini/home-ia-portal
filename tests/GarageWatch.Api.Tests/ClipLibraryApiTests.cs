@@ -1,3 +1,4 @@
+using GarageWatch.Application.Authorization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -35,7 +36,7 @@ public sealed class ClipLibraryApiTests
             var versionId = await database.AccessProfileVersions.AsNoTracking()
                 .Where(item => item.PublicId == videoOnly.CurrentVersionPublicId).Select(item => item.Id).SingleAsync();
             await profiles.ReplaceAssignmentsAsync(adminId, userId,
-                [new ProfileAssignmentRequest(versionId, [new("garage", internalCameraId)])], CancellationToken.None);
+                [new ProfileAssignmentRequest(versionId, [PermissionScope.ForCamera("garage", internalCameraId)])], CancellationToken.None);
         }
 
         using var client = await LoginAsync(factory, "clips-denied", "Clips-Denied-Password-123!");

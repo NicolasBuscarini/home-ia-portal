@@ -10,7 +10,7 @@ public sealed record AdminUserPageResponse(IReadOnlyList<AdminUserSummaryRespons
 public sealed record AdminUserDetailsResponse(string PublicId, string UserName, bool IsActive, bool IsAdministrator,
     IReadOnlyList<AccessProfileAssignmentSummary> AccessProfiles);
 
-public sealed record PublicScopeRequest(string ContextId, string CameraId);
+public sealed record PublicScopeRequest(string? ContextId, string? CameraId, string? Kind = null, string? ModuleId = null);
 public sealed record PublicProfileAssignmentRequest(string ProfileVersionPublicId, IReadOnlyList<PublicScopeRequest> Scopes);
 public sealed record SetUserAccessProfilesRequest(IReadOnlyList<PublicProfileAssignmentRequest>? Assignments);
 

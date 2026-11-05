@@ -4,6 +4,8 @@ using GarageWatch.Api.Errors;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class GetFaceExtractorRegistryEndpoint() : BaseEndpoint("Face extractor", "AdminGetFaceExtractorRegistry",
@@ -12,7 +14,7 @@ public sealed class GetFaceExtractorRegistryEndpoint() : BaseEndpoint("Face extr
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/admin/face-extractor-registry", async (FaceExtractorRegistryService registry,
             CancellationToken cancellationToken) => Results.Ok(await registry.GetAsync(cancellationToken)))
-            .RequireAuthorization("Administrator").Produces<FaceExtractorRegistrySnapshot>()
+            .RequireAuthorization(PermissionPolicy.Name("admin.models.manage")).Produces<FaceExtractorRegistrySnapshot>()
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }
 
@@ -38,7 +40,7 @@ public sealed class CreateFaceExtractorCandidateEndpoint() : BaseEndpoint("Face 
             }
             catch (ArgumentException) { return Results.BadRequest(new ApiErrorResponse("invalid_face_extractor_candidate")); }
             catch (FaceExtractorConflictException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
-        }).RequireAuthorization("Administrator").Produces<FaceExtractorCandidateSummary>(StatusCodes.Status201Created)
+        }).RequireAuthorization(PermissionPolicy.Name("admin.models.manage")).Produces<FaceExtractorCandidateSummary>(StatusCodes.Status201Created)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
@@ -64,7 +66,7 @@ public sealed class SelectFaceExtractorEndpoint() : BaseEndpoint("Face extractor
             catch (ArgumentException) { return Results.BadRequest(new ApiErrorResponse("invalid_face_extractor_selection")); }
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("face_extractor_candidate_not_found")); }
             catch (FaceExtractorConflictException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
-        }).RequireAuthorization("Administrator").Produces<FaceExtractorSelectionResult>()
+        }).RequireAuthorization(PermissionPolicy.Name("admin.models.manage")).Produces<FaceExtractorSelectionResult>()
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)

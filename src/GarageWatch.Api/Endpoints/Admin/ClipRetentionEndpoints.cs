@@ -5,6 +5,8 @@ using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class GetClipRetentionEndpoint() : BaseEndpoint("Clip retention", "GetClipRetention",
@@ -17,7 +19,7 @@ public sealed class GetClipRetentionEndpoint() : BaseEndpoint("Clip retention", 
             try { return Results.Ok(await retention.GetSettingsAsync(cameraId, cancellationToken)); }
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("camera_not_found")); }
             catch (MonitoringRetentionUnavailableException) { return Results.Json(new ApiErrorResponse("monitoring_retention_unavailable"), statusCode: StatusCodes.Status503ServiceUnavailable); }
-        }).RequireAuthorization("Administrator").Produces<ClipRetentionSettings>()
+        }).RequireAuthorization(PermissionPolicy.Name("admin.retention.manage")).Produces<ClipRetentionSettings>()
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 }
@@ -42,7 +44,7 @@ public sealed class UpdateClipRetentionEndpoint() : BaseEndpoint("Clip retention
             catch (KeyNotFoundException) { return Results.NotFound(new ApiErrorResponse("camera_not_found")); }
             catch (ClipRetentionConflictException exception) { return Results.Conflict(new ApiErrorResponse(exception.Message)); }
             catch (MonitoringRetentionUnavailableException) { return Results.Json(new ApiErrorResponse("monitoring_retention_unavailable"), statusCode: StatusCodes.Status503ServiceUnavailable); }
-        }).RequireAuthorization("Administrator").Produces<ClipRetentionSettings>()
+        }).RequireAuthorization(PermissionPolicy.Name("admin.retention.manage")).Produces<ClipRetentionSettings>()
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)

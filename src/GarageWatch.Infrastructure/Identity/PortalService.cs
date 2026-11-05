@@ -193,10 +193,8 @@ public sealed class PortalService(
                         new PermissionRequest(key, internalScope.ContextId, internalScope.CameraId)))
                     allowedScopes.Add(scope);
             }
-            var definition = PermissionCatalog.TryGet(key, out var found) ? found : null;
-            var adminOnlyWithoutScope = definition is { IsDelegable: false } &&
-                subject.Roles.Contains("Administrator", StringComparer.Ordinal) && requestedScopes.Length == 0;
-            var allowed = allowedScopes.Count > 0 || adminOnlyWithoutScope;
+            var ownerWithoutScope = subject.IsOwner && requestedScopes.Length == 0;
+            var allowed = allowedScopes.Count > 0 || ownerWithoutScope;
             decisions.Add(new PortalPermissionDecision(key, allowed, allowedScopes));
         }
         return new PortalAuthorizationDecision("1.0", options.ResidenceId, audience,
@@ -221,7 +219,7 @@ public sealed class PortalService(
             }).ToArrayAsync(cancellationToken);
         return cameras.ToDictionary(
             camera => (camera.ContextPublicId, camera.CameraPublicId),
-            camera => new PermissionScope(camera.ContextId, camera.InternalCameraId));
+            camera => PermissionScope.ForCamera(camera.ContextId, camera.InternalCameraId));
     }
 
     private static PortalPreferences DefaultPreferences() => new(PortalPreferenceCatalog.DefaultThemeId,

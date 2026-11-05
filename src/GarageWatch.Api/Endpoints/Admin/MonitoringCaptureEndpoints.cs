@@ -3,6 +3,8 @@ using GarageWatch.Api.Errors;
 using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Monitoring;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class GetMonitoringCaptureEndpoint() : BaseEndpoint("Monitoring", "GetMonitoringCapture",
@@ -18,7 +20,7 @@ public sealed class GetMonitoringCaptureEndpoint() : BaseEndpoint("Monitoring", 
                 ? Results.Json(new ApiErrorResponse("monitoring_capture_unavailable"),
                     statusCode: StatusCodes.Status503ServiceUnavailable)
                 : Results.Ok(snapshot);
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.capture.manage"))
             .Produces<MonitoringCaptureSnapshot>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
@@ -44,7 +46,7 @@ public sealed class UpdateMonitoringCaptureEndpoint() : BaseEndpoint("Monitoring
                 ? Results.Json(new ApiErrorResponse("monitoring_capture_unavailable"),
                     statusCode: StatusCodes.Status503ServiceUnavailable)
                 : Results.Ok(updated);
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.capture.manage"))
             .Produces<MonitoringCaptureSettings>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status503ServiceUnavailable)

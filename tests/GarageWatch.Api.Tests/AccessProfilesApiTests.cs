@@ -90,10 +90,11 @@ public sealed class AccessProfilesApiTests
         catalogResponse.EnsureSuccessStatusCode();
         var catalog = await catalogResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Contains(catalog.EnumerateArray(), item => item.GetProperty("key").GetString() == "live.video.view");
-        Assert.DoesNotContain(catalog.EnumerateArray(), item => item.GetProperty("key").GetString() == "admin.users.manage");
+        Assert.Contains(catalog.EnumerateArray(), item => item.GetProperty("key").GetString() == "admin.users.manage" && item.GetProperty("isDelegable").GetBoolean());
+        Assert.Contains(catalog.EnumerateArray(), item => item.GetProperty("key").GetString() == "system.owner" && item.GetProperty("ownerOnly").GetBoolean());
 
         using var forbiddenPermission = await admin.PostAsJsonAsync("/api/v1/admin/access-rules",
-            new { name = "Unsafe", permissionKeys = new[] { "admin.users.manage" } });
+            new { name = "Unsafe", permissionKeys = new[] { "admin.permissions.manage" } });
         Assert.Equal(HttpStatusCode.BadRequest, forbiddenPermission.StatusCode);
         using var create = await admin.PostAsJsonAsync("/api/v1/admin/access-rules",
             new { name = "Garage operator", permissionKeys = new[] { "camera.list", "live.video.view" } });

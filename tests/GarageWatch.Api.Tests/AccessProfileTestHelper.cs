@@ -19,7 +19,7 @@ internal static class AccessProfileTestHelper
             .Where(item => item.PublicId == video.CurrentVersionPublicId).Select(item => item.Id)
             .SingleAsync();
         await profiles.ReplaceAssignmentsAsync(administratorId, userId,
-            [new ProfileAssignmentRequest(versionId, [new PermissionScope(contextId, cameraId)])],
+            [new ProfileAssignmentRequest(versionId, [PermissionScope.ForCamera(contextId, cameraId)])],
             CancellationToken.None);
     }
 }

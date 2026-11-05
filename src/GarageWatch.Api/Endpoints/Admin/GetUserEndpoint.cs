@@ -4,6 +4,8 @@ using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class GetUserEndpoint() : BaseEndpoint("User administration", "AdminGetUser",
@@ -21,7 +23,7 @@ public sealed class GetUserEndpoint() : BaseEndpoint("User administration", "Adm
             var isAdministrator = await users.IsInRoleAsync(user, "Administrator");
             return Results.Ok(new AdminUserDetailsResponse(user.PublicId!, user.UserName ?? string.Empty, user.IsActive,
                 isAdministrator, assignments));
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.users.read"))
             .Produces<AdminUserDetailsResponse>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);

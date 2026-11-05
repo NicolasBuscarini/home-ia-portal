@@ -3,6 +3,8 @@ using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Capture;
 using GarageWatch.Infrastructure.Monitoring;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Health;
 
 public sealed class ReadyEndpoint() : BaseEndpoint("Health", "GetReadiness", "Check capture readiness",
@@ -24,7 +26,7 @@ public sealed class ReadyEndpoint() : BaseEndpoint("Health", "GetReadiness", "Ch
                             remote.Segments, options.MaximumSegments))),
                     statusCode: remoteReady ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.system.health.read"))
             .Produces<ReadinessResponse>(StatusCodes.Status200OK)
             .Produces<ReadinessResponse>(StatusCodes.Status503ServiceUnavailable)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);

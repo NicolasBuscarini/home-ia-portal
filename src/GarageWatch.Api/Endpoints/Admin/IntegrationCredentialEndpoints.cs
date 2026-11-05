@@ -6,6 +6,8 @@ using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Infrastructure.Integrations;
 using Microsoft.AspNetCore.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 /// <summary>
@@ -40,7 +42,7 @@ public sealed class GetIntegrationCredentialEndpoint() : BaseEndpoint("Integrati
                 return Results.NotFound(new ApiErrorResponse("unknown_integration"));
             var status = await credentials.GetStatusAsync(integrationId, cancellationToken);
             return Results.Ok(IntegrationCredentialProjection.Project(status, activityWatchOptions));
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.integrations.manage"))
             .Produces<IntegrationCredentialStatusResponse>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
@@ -78,7 +80,7 @@ public sealed class SetIntegrationCredentialEndpoint() : BaseEndpoint("Integrati
                 return Results.Json(new ApiErrorResponse("integration_credential_encryption_unavailable"),
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.integrations.manage"))
             .Produces<IntegrationCredentialStatusResponse>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
@@ -106,7 +108,7 @@ public sealed class RemoveIntegrationCredentialEndpoint() : BaseEndpoint("Integr
             if (actor is null) return Results.Unauthorized();
             var status = await credentials.RemoveAsync(actor.Id, normalized, cancellationToken);
             return Results.Ok(IntegrationCredentialProjection.Project(status, activityWatchOptions));
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.integrations.manage"))
             .Produces<IntegrationCredentialStatusResponse>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);

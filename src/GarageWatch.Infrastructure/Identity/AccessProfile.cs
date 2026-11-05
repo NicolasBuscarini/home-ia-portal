@@ -48,6 +48,8 @@ public sealed class UserAccessProfileAssignment : IHasPublicId
 public sealed class UserAccessProfileScope
 {
     public Guid AssignmentId { get; set; }
+    public string ScopeKind { get; set; } = "camera";
+    public string ModuleId { get; set; } = string.Empty;
     public string ContextId { get; set; } = string.Empty;
     public string CameraId { get; set; } = string.Empty;
     public UserAccessProfileAssignment? Assignment { get; set; }

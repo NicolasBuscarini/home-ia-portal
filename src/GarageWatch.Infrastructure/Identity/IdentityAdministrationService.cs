@@ -1,3 +1,4 @@
+using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ public sealed class IdentityAdministrationService(
     IPlatformEventRepository auditEvents,
     IamDbContext database,
     UserManager<ApplicationUser> users,
+    AccessProfileService profiles,
     TimeProvider timeProvider)
 {
     private static readonly HashSet<string> AssignableRoles = ["User", "Viewer", "Administrator"];
@@ -17,7 +19,6 @@ public sealed class IdentityAdministrationService(
     public Task SetRolesAsync(Guid actorUserId, Guid subjectUserId, IReadOnlyCollection<string> requestedRoles,
         CancellationToken cancellationToken = default) => unitOfWork.ExecuteAtomicallyAsync(async token =>
     {
-        await EnsureAdministratorAsync(actorUserId);
         var targetRoles = requestedRoles.ToHashSet(StringComparer.Ordinal);
         if (targetRoles.Count == 0 || targetRoles.Any(role => !AssignableRoles.Contains(role)))
             throw new ArgumentException("O conjunto de papéis solicitado não é válido.", nameof(requestedRoles));
@@ -27,6 +28,10 @@ public sealed class IdentityAdministrationService(
         if (!user.IsActive) throw new InvalidOperationException("Conta desativada.");
 
         var currentRoles = await users.GetRolesAsync(user);
+        if (targetRoles.Contains("Administrator") || currentRoles.Contains("Administrator"))
+            await EnsureOwnerAsync(actorUserId);
+        else
+            await EnsureUserManagerAsync(actorUserId, token);
         var removesAdministrator = currentRoles.Contains("Administrator") && !targetRoles.Contains("Administrator");
         if (removesAdministrator && !await HasOtherAdministratorAsync(subjectUserId, token))
             throw new InvalidOperationException("Não é permitido remover o último administrador ativo.");
@@ -44,12 +49,15 @@ public sealed class IdentityAdministrationService(
     public Task DeactivateUserAsync(Guid actorUserId, Guid subjectUserId,
         CancellationToken cancellationToken = default) => unitOfWork.ExecuteAtomicallyAsync(async token =>
     {
-        await EnsureAdministratorAsync(actorUserId);
         var user = await users.FindByIdAsync(subjectUserId.ToString())
             ?? throw new KeyNotFoundException("Conta não encontrada.");
         if (!user.IsActive) return;
 
         var currentRoles = await users.GetRolesAsync(user);
+        if (currentRoles.Contains("Administrator"))
+            await EnsureOwnerAsync(actorUserId);
+        else
+            await EnsureUserManagerAsync(actorUserId, token);
         if (currentRoles.Contains("Administrator") && !await HasOtherAdministratorAsync(subjectUserId, token))
             throw new InvalidOperationException("Não é permitido desativar o último administrador ativo.");
 
@@ -79,7 +87,7 @@ public sealed class IdentityAdministrationService(
     public Task GrantCameraAsync(Guid actorUserId, Guid subjectUserId, string contextId, string cameraId,
         CancellationToken cancellationToken = default) => unitOfWork.ExecuteAtomicallyAsync(async token =>
     {
-        await EnsureAdministratorAsync(actorUserId);
+        await EnsureUserManagerAsync(actorUserId, token);
         ValidateIdentifier(contextId, nameof(contextId));
         ValidateIdentifier(cameraId, nameof(cameraId));
         var user = await users.FindByIdAsync(subjectUserId.ToString())
@@ -103,7 +111,7 @@ public sealed class IdentityAdministrationService(
     public Task RevokeCameraAsync(Guid actorUserId, Guid subjectUserId, string cameraId,
         CancellationToken cancellationToken = default) => unitOfWork.ExecuteAtomicallyAsync(async token =>
     {
-        await EnsureAdministratorAsync(actorUserId);
+        await EnsureUserManagerAsync(actorUserId, token);
         if (!await grants.RevokeActiveAsync(subjectUserId, cameraId, timeProvider.GetUtcNow(), token)) return;
         var user = await users.FindByIdAsync(subjectUserId.ToString());
         if (user is not null) await InvalidateSessionsAsync(user);
@@ -117,11 +125,19 @@ public sealed class IdentityAdministrationService(
         return administrators.Any(user => user.Id != excludedUserId && user.IsActive);
     }
 
-    private async Task EnsureAdministratorAsync(Guid actorUserId)
+    private async Task EnsureOwnerAsync(Guid actorUserId)
     {
         var actor = await users.FindByIdAsync(actorUserId.ToString());
         if (actor is null || !actor.IsActive || !await users.IsInRoleAsync(actor, "Administrator"))
-            throw new UnauthorizedAccessException("A operação requer administrador ativo.");
+            throw new UnauthorizedAccessException("A operação requer o owner ativo do portal.");
+    }
+
+    private async Task EnsureUserManagerAsync(Guid actorUserId, CancellationToken cancellationToken)
+    {
+        if (await profiles.IsAllowedAsync(actorUserId,
+                new PermissionRequest("admin.users.manage", ModuleId: "administration"), cancellationToken))
+            return;
+        throw new UnauthorizedAccessException("A operação requer gestão de usuários delegada.");
     }
 
     private async Task InvalidateSessionsAsync(ApplicationUser user)

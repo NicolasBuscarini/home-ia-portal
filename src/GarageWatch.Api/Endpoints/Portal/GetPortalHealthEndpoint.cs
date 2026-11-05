@@ -1,5 +1,7 @@
 using GarageWatch.Application.Portal;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Portal;
 
 public sealed class GetPortalHealthEndpoint() : BaseEndpoint("Portal", "GetPortalHealth",
@@ -11,7 +13,7 @@ public sealed class GetPortalHealthEndpoint() : BaseEndpoint("Portal", "GetPorta
         {
             var report = await health.GetAsync(cancellationToken);
             return Results.Ok(report);
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.system.health.read"))
             .Produces<PortalHealthReport>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }

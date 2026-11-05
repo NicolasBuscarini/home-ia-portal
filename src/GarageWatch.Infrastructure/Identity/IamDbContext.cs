@@ -211,7 +211,16 @@ public sealed class IamDbContext(DbContextOptions<IamDbContext> options, IPublic
         });
         builder.Entity<UserAccessProfileScope>(entity =>
         {
-            entity.HasKey(scope => new { scope.AssignmentId, scope.ContextId, scope.CameraId });
+            entity.HasKey(scope => new
+            {
+                scope.AssignmentId,
+                scope.ScopeKind,
+                scope.ModuleId,
+                scope.ContextId,
+                scope.CameraId
+            });
+            entity.Property(scope => scope.ScopeKind).HasMaxLength(16).IsRequired();
+            entity.Property(scope => scope.ModuleId).HasMaxLength(64).IsRequired();
             entity.Property(scope => scope.ContextId).HasMaxLength(64).IsRequired();
             entity.Property(scope => scope.CameraId).HasMaxLength(64).IsRequired();
             entity.HasOne(scope => scope.Assignment).WithMany(assignment => assignment.Scopes)

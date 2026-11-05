@@ -1,4 +1,5 @@
 using GarageWatch.Api.Contracts;
+using GarageWatch.Application.Authorization;
 using GarageWatch.Api.Endpoints;
 using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -35,26 +36,47 @@ public sealed class ReplaceUserAccessProfilesEndpoint() : BaseEndpoint("User adm
                     .ToDictionaryAsync(item => item.PublicId!, item => item.Id, cancellationToken);
                 if (versions.Count != versionIds.Distinct(StringComparer.Ordinal).Count())
                     return Results.BadRequest(new ApiErrorResponse("invalid_assignments"));
-                var scopes = request.Assignments.SelectMany(item => item.Scopes).ToArray();
-                if (scopes.Any(scope => !PublicIdFormat.IsValid(scope.ContextId, PublicIdPrefixes.ContextPrefix)
-                    || !PublicIdFormat.IsValid(scope.CameraId, PublicIdPrefixes.CameraPrefix)))
-                    return Results.BadRequest(new ApiErrorResponse("invalid_assignments"));
-                var cameras = await database.CameraCatalog.AsNoTracking()
-                    .Where(camera => scopes.Select(scope => scope.CameraId).Contains(camera.PublicId!))
-                    .Select(camera => new
-                    {
-                        camera.PublicId,
-                        camera.CameraId,
-                        camera.ContextId,
-                        ContextPublicId = camera.Context.PublicId
-                    })
+                var contexts = await database.CameraContexts.AsNoTracking()
+                    .ToDictionaryAsync(context => context.PublicId!, context => context.ContextId, cancellationToken);
+                var contextPublicIds = contexts.ToDictionary(item => item.Value, item => item.Key,
+                    StringComparer.Ordinal);
+                var cameraRows = await database.CameraCatalog.AsNoTracking()
+                    .Select(camera => new { camera.PublicId, camera.ContextId, camera.CameraId })
                     .ToArrayAsync(cancellationToken);
-                var scopesByPublicIds = cameras.ToDictionary(camera => (camera.ContextPublicId!, camera.PublicId!),
-                    camera => new GarageWatch.Application.Authorization.PermissionScope(camera.ContextId, camera.CameraId));
+                var cameras = cameraRows.ToDictionary(camera => camera.PublicId!,
+                    camera => (camera.ContextId, camera.CameraId, ContextPublicId: contextPublicIds[camera.ContextId]));
+                var modules = PermissionCatalog.All.Select(item => item.Module)
+                    .ToHashSet(StringComparer.Ordinal);
+                PermissionScope MapScope(PublicScopeRequest scope)
+                {
+                    var kind = scope.Kind?.Trim().ToLowerInvariant() ??
+                        (scope.ModuleId is not null ? "module"
+                            : scope.ContextId is not null && scope.CameraId is not null ? "camera"
+                            : scope.ContextId is not null ? "context" : "global");
+                    return kind switch
+                    {
+                        "global" when scope.ContextId is null && scope.CameraId is null && scope.ModuleId is null =>
+                            PermissionScope.Global,
+                        "module" when scope.ContextId is null && scope.CameraId is null &&
+                                      !string.IsNullOrWhiteSpace(scope.ModuleId) && modules.Contains(scope.ModuleId) =>
+                            PermissionScope.ForModule(scope.ModuleId),
+                        "context" when scope.CameraId is null && scope.ModuleId is null &&
+                                       scope.ContextId is not null &&
+                                       PublicIdFormat.IsValid(scope.ContextId, PublicIdPrefixes.ContextPrefix) &&
+                                       contexts.TryGetValue(scope.ContextId, out var contextId) =>
+                            PermissionScope.ForContext(contextId),
+                        "camera" when scope.ModuleId is null && scope.ContextId is not null &&
+                                      scope.CameraId is not null &&
+                                      PublicIdFormat.IsValid(scope.ContextId, PublicIdPrefixes.ContextPrefix) &&
+                                      PublicIdFormat.IsValid(scope.CameraId, PublicIdPrefixes.CameraPrefix) &&
+                                      cameras.TryGetValue(scope.CameraId, out var camera) &&
+                                      camera.ContextPublicId == scope.ContextId =>
+                            PermissionScope.ForCamera(camera.ContextId, camera.CameraId),
+                        _ => throw new ArgumentException("Escopo inválido.")
+                    };
+                }
                 var internalAssignments = request.Assignments.Select(item => new ProfileAssignmentRequest(
-                    versions[item.ProfileVersionPublicId], item.Scopes.Select(scope =>
-                        scopesByPublicIds.TryGetValue((scope.ContextId, scope.CameraId), out var mapped)
-                            ? mapped : throw new ArgumentException("Escopo inválido.")).ToArray())).ToArray();
+                    versions[item.ProfileVersionPublicId], item.Scopes.Select(MapScope).ToArray())).ToArray();
                 await profiles.ReplaceAssignmentsAsync(actor.Id, targetId.Value, internalAssignments, cancellationToken);
                 return Results.NoContent();
             }
@@ -63,7 +85,7 @@ public sealed class ReplaceUserAccessProfilesEndpoint() : BaseEndpoint("User adm
             {
                 return EndpointSecurity.AdminIdentityError(exception);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.users.manage"))
             .Produces(StatusCodes.Status204NoContent)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)

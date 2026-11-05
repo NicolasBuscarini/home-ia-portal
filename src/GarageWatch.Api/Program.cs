@@ -1,3 +1,4 @@
+using GarageWatch.Api.Authorization;
 using GarageWatch.Api.Behaviors;
 using GarageWatch.Api.Correlation;
 using GarageWatch.Api.Endpoints;
@@ -10,6 +11,7 @@ using GarageWatch.Infrastructure;
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Application.Profiles;
 using GarageWatch.Application.PlatformEvents;
+using GarageWatch.Application.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
@@ -77,12 +79,17 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.FromSeconds(15));
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
 {
-    // Legacy policy name retained during route migration; resource permissions are checked against profiles.
+    // Legacy policy names are kept for routes not yet migrated; every administrative route declares
+    // its catalog permission through PermissionPolicy.Name.
     options.AddPolicy("Viewer", policy => policy.RequireAuthenticatedUser());
     options.AddPolicy("Administrator", policy => policy.RequireRole("Administrator"));
     options.AddPolicy("User", policy => policy.RequireRole("User"));
+    foreach (var definition in PermissionCatalog.All)
+        options.AddPolicy(PermissionPolicy.Name(definition.Key), policy =>
+            policy.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(definition.Key)));
 });
 var eventIngestLimit = 120;
 var rawEventIngestLimit = builder.Configuration["EVENT_INGEST_RATE_LIMIT_PER_MINUTE"];

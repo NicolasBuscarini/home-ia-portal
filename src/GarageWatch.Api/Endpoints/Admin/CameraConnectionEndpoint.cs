@@ -10,6 +10,8 @@ using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class GetCameraConnectionEndpoint() : BaseEndpoint("Camera administration", "GetCameraConnection",
@@ -34,7 +36,7 @@ public sealed class GetCameraConnectionEndpoint() : BaseEndpoint("Camera adminis
             }
             catch (InvalidOperationException) { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
             catch (HttpRequestException) { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.cameras.manage"))
             .Produces<CameraConnectionResponse>().Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound).Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden)
@@ -82,7 +84,7 @@ public sealed class UpdateCameraConnectionEndpoint() : BaseEndpoint("Camera admi
             catch (HttpRequestException exception) when (exception.StatusCode is HttpStatusCode.Conflict)
             { return Results.Conflict(new ApiErrorResponse("camera_address_conflict")); }
             catch (HttpRequestException) { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.cameras.manage"))
             .Produces<CameraConnectionResponse>().Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound).Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden)

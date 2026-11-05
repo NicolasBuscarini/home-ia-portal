@@ -4,6 +4,8 @@ using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class ListUsersEndpoint() : BaseEndpoint("User administration", "AdminListUsers",
@@ -33,7 +35,7 @@ public sealed class ListUsersEndpoint() : BaseEndpoint("User administration", "A
                     .Select(user => new AdminUserSummaryResponse(user.PublicId!, user.UserName ?? string.Empty, user.IsActive))
                     .ToArrayAsync(cancellationToken);
             return Results.Ok(new AdminUserPageResponse(items, currentPage, currentPageSize, totalCount));
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.users.read"))
             .Produces<AdminUserPageResponse>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);

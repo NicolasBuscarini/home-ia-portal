@@ -4,6 +4,8 @@ using GarageWatch.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class CreateAccessProfileEndpoint() : BaseEndpoint("Access profiles", "AdminCreateAccessProfile",
@@ -28,7 +30,7 @@ public sealed class CreateAccessProfileEndpoint() : BaseEndpoint("Access profile
             {
                 return EndpointSecurity.AdminIdentityError(exception);
             }
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("admin.permissions.manage"))
             .Produces<AccessProfileSummary>(StatusCodes.Status201Created)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)

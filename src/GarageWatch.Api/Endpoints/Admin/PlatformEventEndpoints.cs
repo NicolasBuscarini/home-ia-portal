@@ -1,6 +1,8 @@
 using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Infrastructure.Identity;
 
+using GarageWatch.Application.Authorization;
+
 namespace GarageWatch.Api.Endpoints.Admin;
 
 public sealed class ListPlatformEventsEndpoint() : BaseEndpoint("Event administration",
@@ -26,7 +28,7 @@ public sealed class ListPlatformEventsEndpoint() : BaseEndpoint("Event administr
                     ["hasCursor"] = query.Cursor is not null
                 }), cancellationToken);
             return Results.Ok(page);
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("events.read"))
             .Produces<PlatformEventPage>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
@@ -51,7 +53,7 @@ public sealed class GetPlatformEventEndpoint() : BaseEndpoint("Event administrat
                 Resource: new PlatformEventReferenceV1("event", publicId)),
                 cancellationToken);
             return Results.Ok(detail);
-        }).RequireAuthorization("Administrator")
+        }).RequireAuthorization(PermissionPolicy.Name("events.read"))
             .Produces<PlatformEventDetail>(StatusCodes.Status200OK)
             .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
