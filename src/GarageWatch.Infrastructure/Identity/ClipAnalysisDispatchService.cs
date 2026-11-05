@@ -3,6 +3,7 @@ using System.Text.Json;
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Identity;
 using GarageWatch.Application.Monitoring;
+using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Infrastructure.Capture;
 using GarageWatch.Infrastructure.Monitoring;
 using Microsoft.EntityFrameworkCore;
@@ -145,7 +146,7 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
     private async Task AuditDeniedAsync(Guid actorId, string clipId, CancellationToken cancellationToken) =>
         await unitOfWork.ExecuteAtomicallyAsync(token =>
         {
-            Audit(actorId, "clip.analysis.request.denied", clipId);
+            Audit(actorId, "clip.analysis.request.denied", clipId, PlatformEventOutcomes.Denied);
             return Task.CompletedTask;
         }, cancellationToken);
 
@@ -203,7 +204,7 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
     private static bool HasVersionedLargeMotionEvidence(ClipManifestV1 clip) => false;
     private static Guid DeterministicKey(string clipId, string analysisVersion) =>
         new(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{clipId}:{analysisVersion}"))[..16]);
-    private void Audit(Guid? actorId, string action, string clipId) => audit.Append(actorId, actorId, action, clipId,
-        timeProvider.GetUtcNow());
+    private void Audit(Guid? actorId, string action, string clipId, string? outcome = null) =>
+        audit.Append(actorId, actorId, action, clipId, timeProvider.GetUtcNow(), outcome);
     private sealed record CameraScope(string ContextId, string CameraId, string CameraPublicId, string ContextPublicId);
 }

@@ -46,7 +46,7 @@ public interface IPlatformEventRepository
         bool withDetails = false, CancellationToken cancellationToken = default);
 
     void Append(Guid? actorUserId, Guid? subjectUserId, string action, string? resourceId,
-        DateTimeOffset occurredAtUtc);
+        DateTimeOffset occurredAtUtc, string? outcome = null);
 }
 
 public interface IIamUnitOfWork

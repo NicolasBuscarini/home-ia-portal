@@ -1,4 +1,5 @@
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
@@ -12,10 +13,10 @@ public enum RegistrationOutcome
 
 public sealed class IdentityRegistrationService(
     IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents,
+    IPlatformEventRecorder recorder,
     UserManager<ApplicationUser> users,
     IOptions<IdentityOptions> identityOptions,
-    TimeProvider timeProvider)
+    IPublicIdGenerator publicIds)
 {
     public async Task<RegistrationOutcome> RegisterAsync(string? username, string? password,
         string? confirmPassword, CancellationToken cancellationToken = default)
@@ -29,6 +30,7 @@ public sealed class IdentityRegistrationService(
             {
                 Id = Guid.NewGuid(),
                 UserName = username,
+                PublicId = publicIds.Generate(PublicIdPrefixes.UserPrefix),
                 IsActive = true,
                 EmailConfirmed = false,
                 LockoutEnabled = true
@@ -45,7 +47,9 @@ public sealed class IdentityRegistrationService(
             if (!assigned.Succeeded)
                 throw new InvalidOperationException("Não foi possível atribuir o papel básico à nova conta.");
 
-            auditEvents.Append(null, user.Id, "user.registered", null, timeProvider.GetUtcNow());
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "user.registered", PlatformEventOutcomes.Success,
+                Subject: new PlatformEventReferenceV1("user", user.PublicId!)));
         }, cancellationToken);
 
         return RegistrationOutcome.Accepted;

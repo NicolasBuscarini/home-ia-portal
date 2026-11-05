@@ -2,6 +2,7 @@ using System.Security.Claims;
 using GarageWatch.Api.Contracts;
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Application.Portal;
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Infrastructure.Identity.Repositories;
@@ -31,14 +32,16 @@ public sealed class GetActivityWatchSummaryEndpoint() : BaseEndpoint("Portal", "
             if (!subject.IsActive ||
                 !evaluator.IsAllowed(subject, new PermissionRequest("activitywatch.read")))
             {
-                auditEvents.Append(user.Id, null, "activitywatch.read.denied", "activitywatch", now);
+                auditEvents.Append(user.Id, null, "activitywatch.read.denied", "activitywatch", now,
+                    PlatformEventOutcomes.Denied);
                 await database.SaveChangesAsync(cancellationToken);
                 return Results.Forbid();
             }
 
             var summary = await activityWatch.GetSummaryAsync(cancellationToken);
             auditEvents.Append(user.Id, null,
-                summary.Reachable ? "activitywatch.read" : "activitywatch.read.unavailable", "activitywatch", now);
+                summary.Reachable ? "activitywatch.read" : "activitywatch.read.unavailable", "activitywatch", now,
+                summary.Reachable ? null : PlatformEventOutcomes.Error);
             await database.SaveChangesAsync(cancellationToken);
             return Results.Json(summary, statusCode: summary.Reachable
                 ? StatusCodes.Status200OK

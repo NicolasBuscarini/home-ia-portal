@@ -43,6 +43,8 @@ public sealed class RegistrationTests
             var audit = await database.PlatformEvents.SingleAsync(entry => entry.SubjectUserId == userId);
             Assert.Equal("user.registered", audit.EventType);
             Assert.Null(audit.ActorUserId);
+            Assert.Null(audit.ResourceId);
+            Assert.Null(audit.ResourceType);
         }
 
         using var login = await client.PostAsJsonAsync("/api/v1/auth/login",

@@ -1,4 +1,5 @@
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.EntityFrameworkCore;
 
 namespace GarageWatch.Infrastructure.Identity;
@@ -13,7 +14,7 @@ public sealed record AccessRequestResult(string PublicId, string Purpose, string
 public sealed class AccessRequestConflictException(string message) : Exception(message);
 
 public sealed class AccessRequestService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    IPlatformEventRepository auditEvents, TimeProvider timeProvider, IPublicIdGenerator publicIds)
+    IPlatformEventRecorder recorder, TimeProvider timeProvider, IPublicIdGenerator publicIds)
 {
     public Task<AccessRequestResult> CreateAsync(Guid userId, Guid idempotencyKey, string purpose,
         CancellationToken cancellationToken) => unitOfWork.ExecuteAtomicallyAsync(async token =>
@@ -54,7 +55,10 @@ public sealed class AccessRequestService(IamDbContext database, IIamUnitOfWork u
             CreatedAtUtc = timeProvider.GetUtcNow()
         };
         database.AccessRequests.Add(request);
-        auditEvents.Append(userId, userId, "access.request.created", request.Id.ToString("D"), request.CreatedAtUtc);
+        await recorder.RecordRequiredAsync(new PlatformEventDraft(
+            "access.request.created", PlatformEventOutcomes.Success,
+            Subject: new PlatformEventReferenceV1("user", user.PublicId!),
+            Resource: new PlatformEventReferenceV1("access_request", request.PublicId!)));
         return Map(request);
     }, cancellationToken);
 
@@ -95,8 +99,12 @@ public sealed class AccessRequestService(IamDbContext database, IIamUnitOfWork u
                 ?? throw new KeyNotFoundException("Pedido não encontrado.");
             if (request.Status == "reviewed") return;
             request.Status = "reviewed";
-            auditEvents.Append(administratorId, request.UserId, "access.request.reviewed", request.Id.ToString("D"),
-                timeProvider.GetUtcNow());
+            var subjectPublicId = await database.Users.Where(item => item.Id == request.UserId)
+                .Select(item => item.PublicId).SingleAsync(token);
+            await recorder.RecordRequiredAsync(new PlatformEventDraft(
+                "access.request.reviewed", PlatformEventOutcomes.Success,
+                Subject: new PlatformEventReferenceV1("user", subjectPublicId!),
+                Resource: new PlatformEventReferenceV1("access_request", request.PublicId!)));
         }, cancellationToken);
 
     private static AccessRequestResult Map(AccessRequest request) =>

@@ -2,6 +2,7 @@ using GarageWatch.Application.PlatformEvents;
 using GarageWatch.Infrastructure.Identity;
 using GarageWatch.Infrastructure.Identity.Repositories;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -49,7 +50,7 @@ public sealed class PlatformEventPersistenceTests
     }
 
     [Fact]
-    public async Task Append_writes_a_complete_hashed_platform_event()
+    public async Task Append_promotes_a_catalog_action_to_the_typed_envelope()
     {
         await using var fixture = await DatabaseFixture.CreateAsync();
         await fixture.Database.Database.MigrateAsync();
@@ -62,11 +63,45 @@ public sealed class PlatformEventPersistenceTests
         Assert.True(PlatformEventPublicId.IsValid(row.PublicId));
         Assert.Equal(row.Id, row.EventId);
         Assert.Equal(PlatformEventContract.SchemaVersion, row.SchemaVersion);
-        Assert.Equal(PlatformEventCategories.Legacy, row.Category);
+        Assert.Equal(PlatformEventCategories.Administration, row.Category);
+        Assert.Equal(PlatformEventSeverities.Info, row.Severity);
+        Assert.Equal(PlatformEventOutcomes.Success, row.Outcome);
         Assert.Equal(PlatformEventSources.Portal, row.Source);
-        Assert.Equal(PlatformEventOutcomes.Unknown, row.Outcome);
         Assert.Equal(PlatformEventCanonicalizer.ComputePayloadHash(
             PlatformEventBackfillService.ToContract(row)), row.PayloadHash);
+    }
+
+    [Fact]
+    public async Task Append_records_the_explicit_outcome_of_a_denied_action()
+    {
+        await using var fixture = await DatabaseFixture.CreateAsync();
+        await fixture.Database.Database.MigrateAsync();
+        var repository = new PlatformEventRepository(fixture.Database, TimeProvider.System);
+
+        repository.Append(null, null, "camera.access.denied", "CAM000000000002", Now,
+            PlatformEventOutcomes.Denied);
+        await fixture.Database.SaveChangesAsync();
+
+        var row = await fixture.Database.PlatformEvents.SingleAsync();
+        Assert.Equal(PlatformEventCategories.Authorization, row.Category);
+        Assert.Equal(PlatformEventOutcomes.Denied, row.Outcome);
+        Assert.Equal(PlatformEventCanonicalizer.ComputePayloadHash(
+            PlatformEventBackfillService.ToContract(row)), row.PayloadHash);
+    }
+
+    [Fact]
+    public async Task Append_keeps_the_legacy_envelope_for_an_action_outside_the_catalog()
+    {
+        await using var fixture = await DatabaseFixture.CreateAsync();
+        await fixture.Database.Database.MigrateAsync();
+        var repository = new PlatformEventRepository(fixture.Database, TimeProvider.System);
+
+        repository.Append(null, null, "custom.action", null, Now, PlatformEventOutcomes.Denied);
+        await fixture.Database.SaveChangesAsync();
+
+        var row = await fixture.Database.PlatformEvents.SingleAsync();
+        Assert.Equal(PlatformEventCategories.Legacy, row.Category);
+        Assert.Equal(PlatformEventOutcomes.Unknown, row.Outcome);
     }
 
     [Fact]
@@ -109,6 +144,31 @@ public sealed class PlatformEventPersistenceTests
         var remaining = await fixture.Database.PlatformEvents
             .Select(entry => entry.EventType).OrderBy(value => value).ToArrayAsync();
         Assert.Equal(new[] { "old-critical", "recent", "today" }, remaining);
+    }
+
+    [Fact]
+    public async Task Default_retention_expires_every_event_after_thirty_days()
+    {
+        await using var fixture = await DatabaseFixture.CreateAsync();
+        await fixture.Database.Database.MigrateAsync();
+        var options = PlatformEventRetentionOptions.FromConfiguration(new ConfigurationBuilder().Build());
+        Assert.Equal(30, options.RetentionDays);
+        Assert.Equal(30, options.CriticalRetentionDays);
+        var service = new PlatformEventRetentionService(fixture.Database, options, new FixedTimeProvider(Now));
+
+        fixture.Database.PlatformEvents.AddRange(
+            Event("EVT000000000021", "old-normal", Now.AddDays(-31), PlatformEventSeverities.Info),
+            Event("EVT000000000022", "old-critical", Now.AddDays(-31), PlatformEventSeverities.Critical),
+            Event("EVT000000000023", "recent", Now.AddDays(-29), PlatformEventSeverities.Info),
+            Event("EVT000000000024", "today", Now.AddHours(-1), PlatformEventSeverities.Info));
+        await fixture.Database.SaveChangesAsync();
+
+        var deleted = await service.RunOnceAsync();
+
+        Assert.Equal(2, deleted);
+        var remaining = await fixture.Database.PlatformEvents
+            .Select(entry => entry.EventType).OrderBy(value => value).ToArrayAsync();
+        Assert.Equal(new[] { "recent", "today" }, remaining);
     }
 
     private static PlatformEvent Event(string publicId, string eventType, DateTimeOffset occurredAt,

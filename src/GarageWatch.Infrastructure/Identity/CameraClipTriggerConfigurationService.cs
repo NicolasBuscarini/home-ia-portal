@@ -8,7 +8,7 @@ public sealed record CameraClipTriggerConfiguration(string CameraId, bool Enable
     DateTimeOffset UpdatedAtUtc);
 
 public sealed class CameraClipTriggerConfigurationService(IamDbContext database, IIamUnitOfWork unitOfWork,
-    UserManager<ApplicationUser> users, TimeProvider timeProvider)
+    UserManager<ApplicationUser> users, TimeProvider timeProvider, IPlatformEventRepository events)
 {
     public async Task<CameraClipTriggerConfiguration> GetAsync(string publicCameraId,
         CancellationToken cancellationToken)
@@ -39,15 +39,8 @@ public sealed class CameraClipTriggerConfigurationService(IamDbContext database,
                 camera.ClipTriggerEnabled = enabled;
                 camera.ClipTriggerVersion = checked(camera.ClipTriggerVersion + 1);
                 camera.UpdatedAtUtc = timeProvider.GetUtcNow();
-                database.PlatformEvents.Add(new PlatformEvent
-                {
-                    Id = Guid.NewGuid(),
-                    ActorUserId = actorId,
-                    SubjectUserId = actorId,
-                    EventType = "clip.trigger.configuration.updated",
-                    ResourceId = publicCameraId,
-                    OccurredAtUtc = camera.UpdatedAtUtc
-                });
+                events.Append(actorId, actorId, "clip.trigger.configuration.updated", publicCameraId,
+                    camera.UpdatedAtUtc);
             }
             return new CameraClipTriggerConfiguration(camera.PublicId!, camera.ClipTriggerEnabled,
                 camera.ClipTriggerVersion, camera.UpdatedAtUtc);

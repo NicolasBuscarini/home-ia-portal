@@ -21,7 +21,7 @@ public sealed class ClipRetentionConflictException(string code) : Exception(code
 
 public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork unitOfWork,
     UserManager<ApplicationUser> users, TimeProvider timeProvider, CaptureOptions capture,
-    ClipReadLeaseRegistry leases)
+    ClipReadLeaseRegistry leases, IPlatformEventRepository events)
 {
     private const int DefaultRetentionDays = 15;
     private const long BytesPerGiB = 1_073_741_824;
@@ -86,15 +86,7 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
                 current.UpdatedByUserId = actorId.ToString("D");
                 current.UpdatedAtUtc = now;
             }
-            database.PlatformEvents.Add(new PlatformEvent
-            {
-                Id = Guid.NewGuid(),
-                ActorUserId = actorId,
-                SubjectUserId = actorId,
-                EventType = "clip.retention.policy.updated",
-                ResourceId = publicCameraId,
-                OccurredAtUtc = now
-            });
+            events.Append(actorId, actorId, "clip.retention.policy.updated", publicCameraId, now);
             return Map(camera.PublicId!, current);
         }, cancellationToken);
     }
@@ -142,15 +134,8 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
                 current.UpdatedByUserId = actorId.ToString("D");
                 current.UpdatedAtUtc = now;
             }
-            database.PlatformEvents.Add(new PlatformEvent
-            {
-                Id = Guid.NewGuid(),
-                ActorUserId = actorId,
-                SubjectUserId = actorId,
-                EventType = isPreserved ? "clip.preservation.enabled" : "clip.preservation.disabled",
-                ResourceId = publicClipId,
-                OccurredAtUtc = now
-            });
+            events.Append(actorId, actorId,
+                isPreserved ? "clip.preservation.enabled" : "clip.preservation.disabled", publicClipId, now);
             return new ClipPreservationSettings(publicClipId, current.IsPreserved, current.Version);
         }, cancellationToken);
     }
@@ -182,13 +167,7 @@ public sealed class ClipRetentionService(IamDbContext database, IIamUnitOfWork u
     {
         await unitOfWork.ExecuteAtomicallyAsync(token =>
         {
-            database.PlatformEvents.Add(new PlatformEvent
-            {
-                Id = Guid.NewGuid(),
-                EventType = "clip.retention.expired",
-                ResourceId = publicClipId,
-                OccurredAtUtc = timeProvider.GetUtcNow()
-            });
+            events.Append(null, null, "clip.retention.expired", publicClipId, timeProvider.GetUtcNow());
             return Task.CompletedTask;
         }, cancellationToken);
     }

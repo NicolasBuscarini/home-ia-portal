@@ -1,6 +1,7 @@
 using GarageWatch.Application.Cameras;
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Identity;
+using GarageWatch.Application.PlatformEvents;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +30,7 @@ public sealed class CameraResourceAccessService(
         {
             auditEvents.Append(userId, userId, "camera.access.denied", PublicIdFormat.IsValid(cameraId,
                     PublicIdPrefixes.CameraPrefix) ? cameraId : null,
-                timeProvider.GetUtcNow());
+                timeProvider.GetUtcNow(), PlatformEventOutcomes.Denied);
             return Task.CompletedTask;
         }, cancellationToken);
         return false;

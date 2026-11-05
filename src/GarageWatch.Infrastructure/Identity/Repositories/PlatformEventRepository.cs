@@ -23,18 +23,26 @@ public sealed class PlatformEventRepository(IamDbContext database, TimeProvider 
     }
 
     /// <summary>
-    /// Transitional append used by audited portal actions until T17-C/D migrate them to the typed
-    /// writer. The row is a valid legacy-shaped envelope (category <c>legacy</c>), so it is hashable,
-    /// filterable and reconcilable without inventing taxonomy.
+    /// Compatibility append for audited portal actions that still describe the fact as an action
+    /// string. When the action is a catalog type the row is written with the typed category and
+    /// severity plus a real outcome, so new rows stop being <c>legacy</c>; an action outside the
+    /// catalog keeps the legacy envelope as an explicit safety net and remains visible as such.
+    /// Call sites move to <see cref="IPlatformEventRecorder"/> as they gain actor/subject references.
     /// </summary>
     public void Append(Guid? actorUserId, Guid? subjectUserId, string action, string? resourceId,
-        DateTimeOffset occurredAtUtc)
+        DateTimeOffset occurredAtUtc, string? outcome = null)
     {
+        var typed = PlatformEventTypeCatalog.Default.TryGet(action, out var definition);
+        var category = typed ? definition.Category : PlatformEventCategories.Legacy;
+        var severity = typed ? definition.DefaultSeverity : PlatformEventSeverities.Info;
+        var resolvedOutcome = typed
+            ? outcome ?? PlatformEventOutcomes.Success
+            : PlatformEventOutcomes.Unknown;
         var id = Guid.NewGuid();
         var occurred = occurredAtUtc.ToUniversalTime();
         var recorded = timeProvider.GetUtcNow().ToUniversalTime();
-        var value = new PlatformEventV1(id, action, PlatformEventCategories.Legacy,
-            PlatformEventSeverities.Info, PlatformEventOutcomes.Unknown, occurred,
+        var value = new PlatformEventV1(id, action, category,
+            severity, resolvedOutcome, occurred,
             PlatformEventSources.Portal, null, PlatformEventEmitters.Server);
         var error = PlatformEventValidator.Validate(value, recorded);
         if (error is not null)
@@ -46,9 +54,9 @@ public sealed class PlatformEventRepository(IamDbContext database, TimeProvider 
             EventId = id,
             SchemaVersion = PlatformEventContract.SchemaVersion,
             EventType = action,
-            Category = PlatformEventCategories.Legacy,
-            Severity = PlatformEventSeverities.Info,
-            Outcome = PlatformEventOutcomes.Unknown,
+            Category = category,
+            Severity = severity,
+            Outcome = resolvedOutcome,
             Source = PlatformEventSources.Portal,
             Emitter = PlatformEventEmitters.Server,
             ActorUserId = actorUserId,

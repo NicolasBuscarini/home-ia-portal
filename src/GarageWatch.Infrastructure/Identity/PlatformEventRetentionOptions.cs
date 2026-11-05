@@ -3,14 +3,15 @@ using Microsoft.Extensions.Configuration;
 namespace GarageWatch.Infrastructure.Identity;
 
 /// <summary>
-/// Retention of the platform event store. Critical events are kept for the longer window; the
-/// current UTC day is never pruned, so an operator can always inspect today after an incident.
+/// Retention of the platform event store. Both windows default to 30 days (single TTL); the
+/// critical window can still be widened by configuration. The current UTC day is never pruned, so
+/// an operator can always inspect today after an incident.
 /// </summary>
 public sealed record PlatformEventRetentionOptions(
     bool Enabled, int RetentionDays, int CriticalRetentionDays, int SweepIntervalMinutes, int BatchSize)
 {
-    public const int DefaultRetentionDays = 180;
-    public const int DefaultCriticalRetentionDays = 365;
+    public const int DefaultRetentionDays = 30;
+    public const int DefaultCriticalRetentionDays = 30;
     public const int DefaultSweepIntervalMinutes = 60;
     public const int DefaultBatchSize = 500;
 
