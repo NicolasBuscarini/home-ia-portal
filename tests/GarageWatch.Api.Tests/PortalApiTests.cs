@@ -33,6 +33,14 @@ public sealed class PortalApiTests
         Assert.Equal(8, adminMonitoringItems.Length);
         Assert.Equal("monitor", adminMonitoringItems[0]);
         Assert.Contains("people", adminMonitoringItems);
+        var adminAdministration = adminJson.RootElement.GetProperty("modules").EnumerateArray()
+            .Single(item => item.GetProperty("moduleId").GetString() == "administration");
+        var adminAdministrationItems = adminAdministration.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("itemId").GetString()).ToArray();
+        Assert.Contains("audit", adminAdministrationItems);
+        var auditItem = adminAdministration.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("itemId").GetString() == "audit");
+        Assert.Equal("dashboard.menu.audit", auditItem.GetProperty("labelKey").GetString());
 
         var viewerId = await CreateUserAsync(factory, "portal-viewer", "Viewer");
         var administratorId = await GetUserIdAsync(factory, "contract-user");

@@ -253,7 +253,8 @@ public sealed class IamDatabaseInitializer(
             ("monitoring", "people", "dashboard.menu.people", 80, "admin.configuration.manage"),
             ("administration", "users", "dashboard.menu.users", 10, "admin.users.manage"),
             ("administration", "profiles", "dashboard.menu.profiles", 20, "admin.permissions.manage"),
-            ("administration", "requests", "dashboard.menu.accessRequests", 30, "admin.users.manage")
+            ("administration", "requests", "dashboard.menu.accessRequests", 30, "admin.users.manage"),
+            ("administration", "audit", "dashboard.menu.audit", 40, "events.read")
         ];
 
     private async Task EnsurePortalSubmodulesAsync(CancellationToken cancellationToken)
