@@ -82,4 +82,46 @@ public sealed class LocalIdentityEmbeddingSource(IamDbContext database, IBiometr
 
         return new IdentityEmbeddingSnapshot(candidates, skipped);
     }
+
+    public async Task<IdentityEnrollmentEmbedding?> LoadEnrollmentAsync(string enrollmentPublicId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(enrollmentPublicId);
+        if (!string.Equals(configuration["MONITORING_BIOMETRICS_SOURCE"], "local",
+                StringComparison.OrdinalIgnoreCase))
+            throw new IdentityMatchingUnavailableException("identity_ciphertext_source_unavailable");
+        if (!protector.IsConfigured)
+            throw new IdentityMatchingUnavailableException("biometric_protection_not_configured");
+
+        var now = timeProvider.GetUtcNow();
+        var enrollment = await database.BiometricEnrollments.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.PublicId == enrollmentPublicId &&
+                                          item.Status == BiometricEnrollment.ActiveStatus &&
+                                          item.ExpiresAtUtc > now, cancellationToken);
+        if (enrollment is null || enrollment.EmbeddingCiphertext.Length == 0 ||
+            enrollment.Dimensions is <= 0 or > 4096)
+            return null;
+
+        byte[]? plaintext = null;
+        try
+        {
+            plaintext = protector.Unprotect(new ProtectedBiometricEmbedding(
+                enrollment.EmbeddingCiphertext, enrollment.EmbeddingNonce, enrollment.EmbeddingTag,
+                enrollment.KeyVersion));
+            var values = BiometricEmbeddingCodec.Deserialize(plaintext, enrollment.Dimensions);
+            if (values is null) return null;
+            return new IdentityEnrollmentEmbedding(enrollment.PublicId!, enrollment.ModelId,
+                enrollment.ModelVersion, enrollment.SchemaVersion, enrollment.Dimensions, values);
+        }
+        catch (Exception exception) when (exception is CryptographicException or InvalidOperationException)
+        {
+            logger.LogWarning("Inscrição biométrica local não pôde ser verificada: motivo={Reason}",
+                exception.GetType().Name);
+            return null;
+        }
+        finally
+        {
+            if (plaintext is not null) Array.Clear(plaintext);
+        }
+    }
 }

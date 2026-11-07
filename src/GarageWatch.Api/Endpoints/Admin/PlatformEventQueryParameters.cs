@@ -29,6 +29,12 @@ internal static class PlatformEventQueryParameters
         }
 
         var actor = Text(values, "actor");
+        var excludeActors = values["excludeActor"]
+            .SelectMany(value => (value ?? string.Empty).Split(',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (excludeActors.Length > 20 || excludeActors.Any(value => value.Length > 128)) return false;
         var eventType = Text(values, "eventType");
         var category = Text(values, "category");
         var outcome = Text(values, "outcome");
@@ -56,9 +62,9 @@ internal static class PlatformEventQueryParameters
             return false;
 
         query = new PlatformEventQuery(
-            from.Value.ToUniversalTime(), to.Value.ToUniversalTime(), actor, eventType, category,
-            outcome, source, correlation, resourceType, resourceId, search, browser, os, device,
-            pageSize, cursor);
+            from.Value.ToUniversalTime(), to.Value.ToUniversalTime(), actor, excludeActors, eventType,
+            category, outcome, source, correlation, resourceType, resourceId, search, browser, os,
+            device, pageSize, cursor);
         return true;
     }
 

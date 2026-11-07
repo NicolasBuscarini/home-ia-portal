@@ -124,25 +124,28 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         }
     }
 
-    public async Task AutoRequestAsync(ClipManifestV1 clip, CancellationToken cancellationToken)
+    public async Task<bool> AutoRequestAsync(ClipManifestV1 clip, CancellationToken cancellationToken)
     {
-        if (clip.State != "ready" || !await IsMediaIntactAsync(clip, cancellationToken)) return;
+        if (clip.State != "ready" || !await IsMediaIntactAsync(clip, cancellationToken)) return false;
         var scope = await FindEnabledCameraAsync(clip.CameraId, cancellationToken);
-        if (scope is null) return;
+        if (scope is null) return false;
         var effectivePolicy = (await RemoteClient.GetPolicyAsync(scope.CameraId, cancellationToken))?.Policy;
-        if (effectivePolicy is null or ClipAnalysisPolicies.ManualOnly or ClipAnalysisPolicies.Never) return;
-        if (effectivePolicy == ClipAnalysisPolicies.LargeMotion && !HasVersionedLargeMotionEvidence(clip)) return;
+        if (effectivePolicy is null or ClipAnalysisPolicies.ManualOnly or ClipAnalysisPolicies.Never) return false;
+        if (effectivePolicy == ClipAnalysisPolicies.LargeMotion && !HasVersionedLargeMotionEvidence(clip))
+            return false;
         try
         {
             await RemoteClient.EnqueueAsync(new MonitoringAnalysisEnqueue(clip.ClipId, clip.PublicId!,
                 scope.CameraId, scope.ContextId, DeterministicKey(clip.ClipId, options.DefaultAnalysisVersion),
                 options.DefaultAnalysisVersion, "automatic"), cancellationToken);
+            return true;
         }
         catch (Exception exception) when (exception is ClipAnalysisCapacityException or ClipAnalysisDeniedException
             or MonitoringAnalysisCapacityException or MonitoringAnalysisDeniedException
             or MonitoringAnalysisUnavailableException)
         {
             // Dispatch failures are intentionally isolated from capture and clip assembly.
+            return false;
         }
     }
 
@@ -168,15 +171,19 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
     {
         var directory = Path.Combine(capture.SpoolDirectory, "clips", "manifests");
         if (!Directory.Exists(directory)) return null;
+        // Resolve o manifesto pelo identificador público antes de calcular checksum: o spool
+        // pode conter milhares de clipes e hashear toda a mídia a cada pedido bloqueia a API.
         foreach (var path in Directory.EnumerateFiles(directory, "*.json").Take(10_000))
         {
-            var candidate = await ReadReadyClipByPathAsync(path, cancellationToken);
-            if (candidate?.PublicId == publicId) return candidate;
+            var candidate = await ReadReadyClipMetadataAsync(path, cancellationToken);
+            if (candidate?.PublicId != publicId) continue;
+            return await IsMediaIntactAsync(candidate, cancellationToken) ? candidate : null;
         }
         return null;
     }
 
-    private async Task<ClipManifestV1?> ReadReadyClipByPathAsync(string path, CancellationToken cancellationToken)
+    private static async Task<ClipManifestV1?> ReadReadyClipMetadataAsync(string path,
+        CancellationToken cancellationToken)
     {
         if (!File.Exists(path)) return null;
         try
@@ -184,8 +191,7 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
             await using var stream = File.OpenRead(path);
             var clip = await JsonSerializer.DeserializeAsync<ClipManifestV1>(stream, JsonOptions, cancellationToken);
             return clip is { SchemaVersion: "1.0", State: "ready" } &&
-                   PublicIdFormat.IsValid(clip.PublicId, PublicIdPrefixes.ClipPrefix) &&
-                   await IsMediaIntactAsync(clip, cancellationToken) ? clip : null;
+                   PublicIdFormat.IsValid(clip.PublicId, PublicIdPrefixes.ClipPrefix) ? clip : null;
         }
         catch (IOException) { return null; }
         catch (JsonException) { return null; }
@@ -203,7 +209,43 @@ public sealed class ClipAnalysisDispatchService(IamDbContext database, IIamUnitO
         return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(hash), Convert.FromHexString(clip.MediaSha256));
     }
 
-    private static bool HasVersionedLargeMotionEvidence(ClipManifestV1 clip) => false;
+    /// <summary>
+    /// Reconciles a bounded window of clips assembled before this process started. The automatic
+    /// dispatcher only sees clips as they become ready; without this pass a restart leaves recent
+    /// clips permanently at "not requested" even when the camera policy is automatic.
+    /// </summary>
+    public async Task<int> ReconcileRecentAsync(int limit, CancellationToken cancellationToken)
+    {
+        if (limit is < 1 or > 200) throw new ArgumentOutOfRangeException(nameof(limit));
+        var directory = Path.Combine(capture.SpoolDirectory, "clips", "manifests");
+        if (!Directory.Exists(directory)) return 0;
+        var clips = new List<ClipManifestV1>();
+        foreach (var file in Directory.EnumerateFiles(directory, "*.json")
+                     .Select(path => new FileInfo(path))
+                     .OrderByDescending(file => file.LastWriteTimeUtc)
+                     .Take(limit))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var clip = await ReadReadyClipMetadataAsync(file.FullName, cancellationToken);
+            if (clip is not null && HasVersionedLargeMotionEvidence(clip)) clips.Add(clip);
+        }
+        if (clips.Count == 0) return 0;
+        var statuses = await RemoteClient.LatestForClipsAsync(
+            clips.Select(clip => clip.PublicId!).ToArray(), cancellationToken);
+        var existing = statuses?.Select(status => status.ClipPublicId)
+            .ToHashSet(StringComparer.Ordinal) ?? [];
+        var inspected = 0;
+        foreach (var clip in clips.Where(clip => !existing.Contains(clip.PublicId!)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await AutoRequestAsync(clip, cancellationToken)) inspected++;
+        }
+        return inspected;
+    }
+
+    private static bool HasVersionedLargeMotionEvidence(ClipManifestV1 clip) =>
+        string.Equals(clip.TriggerConfigVersion, "trigger-v1", StringComparison.Ordinal)
+        && clip.TriggerReason.StartsWith("visual_change:", StringComparison.Ordinal);
     private static Guid DeterministicKey(string clipId, string analysisVersion) =>
         new(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{clipId}:{analysisVersion}"))[..16]);
     private async Task AuditAsync(Guid? actorId, string action, string resourceId, string? outcome,

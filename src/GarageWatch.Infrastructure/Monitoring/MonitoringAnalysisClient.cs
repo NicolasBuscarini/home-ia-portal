@@ -137,6 +137,30 @@ public sealed class MonitoringAnalysisClient(
         }
     }
 
+    public async Task<MonitoringAnalysisResult?> GetResultAsync(string clipPublicId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(clipPublicId) || clipPublicId.Length > 128) return null;
+        try
+        {
+            using var client = httpClientFactory.CreateClient("monitoring-module");
+            using var response = await client.GetAsync(
+                "api/v1/monitoring/analysis/results/" + Uri.EscapeDataString(clipPublicId), cancellationToken);
+            if (response.StatusCode == HttpStatusCode.NotFound) return null;
+            if (!response.IsSuccessStatusCode) throw new MonitoringAnalysisUnavailableException();
+            return await response.Content.ReadFromJsonAsync<MonitoringAnalysisResult>(cancellationToken)
+                ?? throw new MonitoringAnalysisUnavailableException();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or JsonException)
+        {
+            throw new MonitoringAnalysisUnavailableException();
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new MonitoringAnalysisUnavailableException();
+        }
+    }
+
     private static async Task<string> ErrorCodeAsync(HttpResponseMessage response,
         CancellationToken cancellationToken)
     {

@@ -111,6 +111,71 @@ public sealed class MonitoringAnalysisDispatchTests
     }
 
     [Fact]
+    public async Task Large_motion_policy_auto_enqueues_only_versioned_visual_change_clips()
+    {
+        var remote = new FakeAnalysisClient
+        {
+            Policy = new MonitoringAnalysisPolicy("garage-01", "large_motion", 1, DateTimeOffset.UtcNow),
+            Enqueued = new MonitoringAnalysisJob("JOB000000000002", "CLP000000000002", "analysis-v1",
+                "analysis_pending", false)
+        };
+        await using var factory = new ApiFactory(monitoringAnalysisSource: "remote",
+            monitoringAnalysisClient: remote);
+        var cameraId = factory.Services.GetRequiredService<CaptureOptions>().CameraId;
+        var clip = await PersistReadyClipAsync(factory, cameraId);
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ClipAnalysisDispatchService>();
+
+        await service.AutoRequestAsync(clip with { TriggerConfigVersion = "" }, CancellationToken.None);
+        Assert.Null(remote.LastEnqueue);
+
+        await service.AutoRequestAsync(clip, CancellationToken.None);
+        Assert.NotNull(remote.LastEnqueue);
+        Assert.Equal("automatic", remote.LastEnqueue!.RequestKind);
+        Assert.Equal(clip.PublicId, remote.LastEnqueue.ClipPublicId);
+    }
+
+    [Fact]
+    public async Task Startup_reconciliation_enqueues_recent_clips_with_versioned_trigger_evidence()
+    {
+        var remote = new FakeAnalysisClient
+        {
+            Policy = new MonitoringAnalysisPolicy("garage-01", "large_motion", 1, DateTimeOffset.UtcNow),
+            Enqueued = new MonitoringAnalysisJob("JOB000000000003", "CLP000000000003", "analysis-v1",
+                "analysis_pending", false)
+        };
+        await using var factory = new ApiFactory(monitoringAnalysisSource: "remote",
+            monitoringAnalysisClient: remote);
+        var cameraId = factory.Services.GetRequiredService<CaptureOptions>().CameraId;
+        var clip = await PersistReadyClipAsync(factory, cameraId);
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ClipAnalysisDispatchService>();
+
+        Assert.True(await service.ReconcileRecentAsync(50, CancellationToken.None) >= 1);
+        Assert.Contains(remote.Enqueues, request => request.RequestKind == "automatic"
+            && request.ClipPublicId == clip.PublicId);
+    }
+
+    [Fact]
+    public async Task Startup_reconciliation_skips_recent_clips_that_already_have_a_job()
+    {
+        var remote = new FakeAnalysisClient
+        {
+            Policy = new MonitoringAnalysisPolicy("garage-01", "large_motion", 1, DateTimeOffset.UtcNow)
+        };
+        await using var factory = new ApiFactory(monitoringAnalysisSource: "remote",
+            monitoringAnalysisClient: remote);
+        var cameraId = factory.Services.GetRequiredService<CaptureOptions>().CameraId;
+        var clip = await PersistReadyClipAsync(factory, cameraId);
+        remote.ExistingClipIds.Add(clip.PublicId!);
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ClipAnalysisDispatchService>();
+
+        await service.ReconcileRecentAsync(50, CancellationToken.None);
+        Assert.DoesNotContain(remote.Enqueues, request => request.ClipPublicId == clip.PublicId);
+    }
+
+    [Fact]
     public async Task Remote_unavailability_is_explicit_and_does_not_silently_use_local_state()
     {
         var remote = new FakeAnalysisClient { Unavailable = true };
@@ -179,6 +244,8 @@ public sealed class MonitoringAnalysisDispatchTests
         public string? LastPolicy { get; private set; }
         public string? LastActorId { get; private set; }
         public MonitoringAnalysisEnqueue? LastEnqueue { get; private set; }
+        public List<MonitoringAnalysisEnqueue> Enqueues { get; } = [];
+        public HashSet<string> ExistingClipIds { get; } = new(StringComparer.Ordinal);
 
         public Task<MonitoringAnalysisPolicy?> GetPolicyAsync(string cameraId,
             CancellationToken cancellationToken = default)
@@ -204,6 +271,7 @@ public sealed class MonitoringAnalysisDispatchTests
             CancellationToken cancellationToken = default)
         {
             LastEnqueue = request;
+            Enqueues.Add(request);
             if (Unavailable) throw new MonitoringAnalysisUnavailableException();
             return Task.FromResult(Enqueued);
         }
@@ -218,7 +286,12 @@ public sealed class MonitoringAnalysisDispatchTests
             IReadOnlyCollection<string> clipPublicIds, CancellationToken cancellationToken = default)
         {
             if (Unavailable) throw new MonitoringAnalysisUnavailableException();
-            return Task.FromResult<IReadOnlyList<MonitoringAnalysisJobStatus>?>([]);
+            return Task.FromResult<IReadOnlyList<MonitoringAnalysisJobStatus>?>(
+                ExistingClipIds.Select(id => new MonitoringAnalysisJobStatus(id, "completed", "completed"))
+                    .ToArray());
         }
+
+        public Task<MonitoringAnalysisResult?> GetResultAsync(string clipPublicId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

@@ -75,10 +75,26 @@ public sealed record IdentityEmbeddingSnapshot(
     IReadOnlyList<IdentityEmbeddingCandidate> Candidates,
     int SkippedEnrollments);
 
+/// <summary>One decrypted enrollment loaded for a 1:1 verification; plaintext lives only in memory.</summary>
+public sealed record IdentityEnrollmentEmbedding(
+    string EnrollmentPublicId,
+    string ModelId,
+    string ModelVersion,
+    string SchemaVersion,
+    int Dimensions,
+    float[] Values);
+
 /// <summary>Boundary that resolves active, person-linked enrollments into comparable embeddings.</summary>
 public interface IIdentityEmbeddingSource
 {
     Task<IdentityEmbeddingSnapshot> LoadAsync(FaceObservationV1 observation,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads one active enrollment regardless of its roster link, for gesture-confirmed 1:1 verification.
+    /// Returns null when the enrollment does not exist or cannot be decrypted.
+    /// </summary>
+    Task<IdentityEnrollmentEmbedding?> LoadEnrollmentAsync(string enrollmentPublicId,
         CancellationToken cancellationToken = default);
 }
 

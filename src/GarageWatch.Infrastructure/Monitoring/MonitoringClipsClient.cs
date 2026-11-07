@@ -75,6 +75,60 @@ public sealed class MonitoringClipsClient(
         }
     }
 
+    public async Task<MonitoringClipDeleteResult> DeleteAsync(string publicId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var client = httpClientFactory.CreateClient("monitoring-module");
+            using var response = await client.DeleteAsync(
+                $"api/v1/monitoring/clips/{Uri.EscapeDataString(publicId)}", cancellationToken);
+            if (response.StatusCode == HttpStatusCode.NoContent)
+                return new(MonitoringClipDeleteStatus.Deleted);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return new(MonitoringClipDeleteStatus.NotFound, "clip_not_found");
+            var error = await response.Content.ReadFromJsonAsync<DeleteError>(cancellationToken);
+            return error?.Error switch
+            {
+                "clip_preserved" => new(MonitoringClipDeleteStatus.Preserved, error.Error),
+                "clip_archived" => new(MonitoringClipDeleteStatus.Archived, error.Error),
+                "clip_not_ready" => new(MonitoringClipDeleteStatus.NotReady, error.Error),
+                _ => new(MonitoringClipDeleteStatus.Failed, error?.Error ?? "clip_delete_failed")
+            };
+        }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        {
+            return new(MonitoringClipDeleteStatus.Unavailable, "clip_delete_unavailable");
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new(MonitoringClipDeleteStatus.Unavailable, "clip_delete_unavailable");
+        }
+    }
+
+    public async Task<MonitoringClipDeleteAllResult?> DeleteAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var client = httpClientFactory.CreateClient("monitoring-module");
+            using var response = await client.PostAsync("api/v1/monitoring/clips/delete-all", null,
+                cancellationToken);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<MonitoringClipDeleteAllResult>(cancellationToken);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        {
+            return null;
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    private sealed record DeleteError(string? Error);
+
     public Task<HttpResponseMessage?> GetThumbnailAsync(string publicId,
         CancellationToken cancellationToken = default) =>
         GetFileAsync($"api/v1/monitoring/clips/{Uri.EscapeDataString(publicId)}/thumbnail", null,

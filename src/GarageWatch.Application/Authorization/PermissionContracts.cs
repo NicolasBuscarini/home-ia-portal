@@ -28,6 +28,8 @@ public static class PermissionCatalog
                 PermissionRisk.Low, all),
             new PermissionDefinition("clips.export", "Export clips", "clips", "read",
                 PermissionRisk.Medium, all),
+            new PermissionDefinition("clips.delete", "Delete clips", "clips", "delete",
+                PermissionRisk.High, all),
             new PermissionDefinition("clips.analysis.request", "Request clip analysis", "clips", "analysis",
                 PermissionRisk.Low, all),
             new PermissionDefinition("clips.analysis.policy.manage", "Manage clip analysis dispatch policy",

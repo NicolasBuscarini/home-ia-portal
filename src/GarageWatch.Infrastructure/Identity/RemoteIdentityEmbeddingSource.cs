@@ -83,4 +83,52 @@ public sealed class RemoteIdentityEmbeddingSource(IMonitoringBiometricCiphertext
 
         return new IdentityEmbeddingSnapshot(candidates, skipped);
     }
+
+    public async Task<IdentityEnrollmentEmbedding?> LoadEnrollmentAsync(string enrollmentPublicId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(enrollmentPublicId);
+        if (!protector.IsConfigured)
+            throw new IdentityMatchingUnavailableException("biometric_protection_not_configured");
+
+        IReadOnlyList<MonitoringBiometricCiphertext> envelopes;
+        try
+        {
+            envelopes = await client.ListActiveAsync(cancellationToken);
+        }
+        catch (MonitoringBiometricsUnavailableException)
+        {
+            throw new IdentityMatchingUnavailableException("biometrics_store_unavailable");
+        }
+
+        var envelope = envelopes.FirstOrDefault(item =>
+            string.Equals(item.PublicId, enrollmentPublicId, StringComparison.Ordinal));
+        if (envelope is null) return null;
+        if (envelope.ExpiresAtUtc <= timeProvider.GetUtcNow() ||
+            envelope.EmbeddingCiphertext.Length == 0 ||
+            envelope.Dimensions is <= 0 or > 4096)
+            return null;
+
+        byte[]? plaintext = null;
+        try
+        {
+            plaintext = protector.Unprotect(new ProtectedBiometricEmbedding(
+                envelope.EmbeddingCiphertext, envelope.EmbeddingNonce, envelope.EmbeddingTag,
+                envelope.KeyVersion));
+            var values = BiometricEmbeddingCodec.Deserialize(plaintext, envelope.Dimensions);
+            if (values is null) return null;
+            return new IdentityEnrollmentEmbedding(envelope.PublicId, envelope.ModelId,
+                envelope.ModelVersion, envelope.EmbeddingSchemaVersion, envelope.Dimensions, values);
+        }
+        catch (Exception exception) when (exception is CryptographicException or InvalidOperationException)
+        {
+            logger.LogWarning("Inscrição biométrica remota não pôde ser verificada: motivo={Reason}",
+                exception.GetType().Name);
+            return null;
+        }
+        finally
+        {
+            if (plaintext is not null) Array.Clear(plaintext);
+        }
+    }
 }

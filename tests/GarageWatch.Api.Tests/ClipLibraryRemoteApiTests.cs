@@ -116,6 +116,43 @@ public sealed class ClipLibraryRemoteApiTests
     }
 
     [Fact]
+    public async Task Remote_clip_analysis_result_is_visible_to_an_authorized_reader()
+    {
+        var clipId = "0123456789abcdef0123456789abcdea";
+        var publicId = "CLP000000000003";
+        var fake = new FakeClipsClient(null);
+        var analysis = new FakeAnalysisStatusClient();
+        await using var factory = new ApiFactory(monitoringClipsSource: "remote", monitoringClipsClient: fake,
+            monitoringAnalysisSource: "remote", monitoringAnalysisClient: analysis);
+        using var admin = await LoginAsync(factory);
+        var internalCameraId = factory.Services
+            .GetRequiredService<GarageWatch.Infrastructure.Capture.CaptureOptions>().CameraId;
+        fake.Page = new MonitoringClipPage(
+        [
+            new MonitoringClipItem(publicId, clipId, internalCameraId, DateTimeOffset.UtcNow.AddMinutes(-1),
+                DateTimeOffset.UtcNow, "ready", "not_requested", "motion", "1", null, null, 0,
+                DateTimeOffset.UtcNow, 1024)
+        ], 1, 25, 1);
+        analysis.States = [new MonitoringAnalysisJobStatus(publicId, "completed", "completed")];
+        analysis.Result = new MonitoringAnalysisResult("analysis-result.v1", publicId, internalCameraId,
+            "analysis-v1", "yolox-nano-0.1.1rc0", 12,
+            [new MonitoringAnalysisObject("person", 0, 0.87f, 0.1f, 0.2f, 0.3f, 0.4f, 3)],
+            DateTimeOffset.UtcNow);
+
+        using var response = await admin.GetAsync($"/api/v1/clips/{publicId}/analysis-result");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("yolox-nano-0.1.1rc0", body.GetProperty("modelVersion").GetString());
+        Assert.Equal(12, body.GetProperty("framesAnalyzed").GetInt32());
+        Assert.Equal("person", body.GetProperty("objects")[0].GetProperty("className").GetString());
+        Assert.Equal(3, body.GetProperty("objects")[0].GetProperty("frameIndex").GetInt32());
+
+        analysis.Result = null;
+        using var missing = await admin.GetAsync($"/api/v1/clips/{publicId}/analysis-result");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
     public async Task Remote_analysis_outage_keeps_clip_listing_available()
     {
         var fake = new FakeClipsClient(null);
@@ -149,7 +186,15 @@ public sealed class ClipLibraryRemoteApiTests
     {
         public IReadOnlyList<string> LastClipIds { get; private set; } = [];
         public IReadOnlyList<MonitoringAnalysisJobStatus> States { get; set; } = [];
+        public MonitoringAnalysisResult? Result { get; set; }
         public bool Unavailable { get; set; }
+
+        public Task<MonitoringAnalysisResult?> GetResultAsync(string clipPublicId,
+            CancellationToken cancellationToken = default)
+        {
+            if (Unavailable) throw new MonitoringAnalysisUnavailableException();
+            return Task.FromResult(Result);
+        }
 
         public Task<IReadOnlyList<MonitoringAnalysisJobStatus>?> LatestForClipsAsync(
             IReadOnlyCollection<string> clipPublicIds, CancellationToken cancellationToken = default)
@@ -225,6 +270,14 @@ public sealed class ClipLibraryRemoteApiTests
             var item = Page?.Items.SingleOrDefault(candidate => candidate.PublicId == publicId);
             return Task.FromResult(item is null ? null : item with { ThumbnailSha256 = new string('a', 64) });
         }
+
+        public Task<MonitoringClipDeleteResult> DeleteAsync(string publicId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new MonitoringClipDeleteResult(MonitoringClipDeleteStatus.Deleted));
+
+        public Task<MonitoringClipDeleteAllResult?> DeleteAllAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<MonitoringClipDeleteAllResult?>(new MonitoringClipDeleteAllResult(0, 0, 0, 0, 0, 0));
 
         public Task<HttpResponseMessage?> GetThumbnailAsync(string publicId,
             CancellationToken cancellationToken = default)

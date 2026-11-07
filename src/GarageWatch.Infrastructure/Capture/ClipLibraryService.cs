@@ -39,7 +39,8 @@ public sealed class ClipLibraryService(IamDbContext database, AccessProfileServi
             (minDurationSeconds is < 0 or > 86_400) || (maxDurationSeconds is < 0 or > 86_400) ||
             (minDurationSeconds.HasValue && maxDurationSeconds.HasValue &&
                 minDurationSeconds > maxDurationSeconds) ||
-            (analysis is not null && analysis is not ("performed" or "not_performed")) ||
+            (analysis is not null && analysis is not ("performed" or "not_performed" or
+                "pending" or "completed" or "failed")) ||
             (sort is not null && sort is not ("newest" or "oldest" or "longest" or "shortest" or
                 "largest" or "smallest")) ||
             (state is not null && state is not ("collecting" or "ready" or "failed" or "lost_capacity")))

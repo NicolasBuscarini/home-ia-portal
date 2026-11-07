@@ -18,7 +18,7 @@ public sealed class FaceEmbeddingContractTests
         Assert.Equal(FaceEmbeddingV1.CurrentSchemaVersion, embedding.SchemaVersion);
         Assert.Equal("test-face-model", embedding.ModelId);
         Assert.Equal(3, embedding.Dimensions);
-        Assert.False(new FaceCropV1("image/jpeg", 4096, 160, new byte[] { 1 }).IsValid);
+        Assert.False(new FaceCropV1("image/jpeg", 6001, 160, new byte[] { 1 }).IsValid);
         Assert.False((embedding with { Values = [float.NaN, 0, 1] }).IsValid);
     }
 

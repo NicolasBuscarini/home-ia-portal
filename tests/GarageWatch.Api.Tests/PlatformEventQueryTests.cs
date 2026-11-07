@@ -73,6 +73,64 @@ public sealed class PlatformEventQueryTests
     }
 
     [Fact]
+    public async Task Admin_list_projects_actor_username_and_excludes_selected_actors()
+    {
+        await using var factory = new ApiFactory();
+        using var client = await AdministratorClient(factory);
+        ApplicationUser first;
+        ApplicationUser second;
+        string firstPublicId;
+        string secondPublicId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<
+                Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            first = new ApplicationUser { Id = Guid.NewGuid(), UserName = "audit-alpha", IsActive = true };
+            second = new ApplicationUser { Id = Guid.NewGuid(), UserName = "audit-beta", IsActive = true };
+            Assert.True((await users.CreateAsync(first, Password)).Succeeded);
+            Assert.True((await users.CreateAsync(second, Password)).Succeeded);
+            var database = scope.ServiceProvider.GetRequiredService<IamDbContext>();
+            var now = DateTimeOffset.UtcNow.AddMinutes(-2);
+            Seed(database, "EVT000000000301", "camera.connection.address.updated", now,
+                correlation: "corr-exclusion-0001", actorUserId: first.Id);
+            Seed(database, "EVT000000000302", "camera.connection.address.updated", now.AddSeconds(1),
+                correlation: "corr-exclusion-0001", actorUserId: second.Id);
+            Seed(database, "EVT000000000303", "camera.connection.address.updated", now.AddSeconds(2),
+                correlation: "corr-exclusion-0001");
+            await database.SaveChangesAsync();
+            firstPublicId = await database.Users.Where(user => user.Id == first.Id)
+                .Select(user => user.PublicId!).SingleAsync();
+            secondPublicId = await database.Users.Where(user => user.Id == second.Id)
+                .Select(user => user.PublicId!).SingleAsync();
+        }
+
+        var all = await client.GetFromJsonAsync<PlatformEventPage>(
+            "/api/v1/admin/events?correlationId=corr-exclusion-0001&pageSize=10");
+        Assert.NotNull(all);
+        Assert.Equal(3, all.Items.Count);
+        Assert.Equal("audit-alpha", all.Items.Single(item => item.PublicId == "EVT000000000301")
+            .ActorUsername);
+        Assert.Equal("audit-beta", all.Items.Single(item => item.PublicId == "EVT000000000302")
+            .ActorUsername);
+
+        var byActor = await client.GetFromJsonAsync<PlatformEventPage>(
+            $"/api/v1/admin/events?correlationId=corr-exclusion-0001&actor={firstPublicId}&pageSize=10");
+        Assert.NotNull(byActor);
+        Assert.Equal("EVT000000000301", Assert.Single(byActor.Items).PublicId);
+
+        var byUsername = await client.GetFromJsonAsync<PlatformEventPage>(
+            "/api/v1/admin/events?correlationId=corr-exclusion-0001&excludeActor=audit-beta&pageSize=10");
+        Assert.NotNull(byUsername);
+        Assert.DoesNotContain(byUsername.Items, item => item.PublicId == "EVT000000000302");
+        Assert.Equal(2, byUsername.Items.Count);
+
+        var byPublicId = await client.GetFromJsonAsync<PlatformEventPage>(
+            $"/api/v1/admin/events?correlationId=corr-exclusion-0001&excludeActor={firstPublicId}&excludeActor={secondPublicId}&pageSize=10");
+        Assert.NotNull(byPublicId);
+        Assert.Equal("EVT000000000303", Assert.Single(byPublicId.Items).PublicId);
+    }
+
+    [Fact]
     public async Task Query_rejects_anonymous_non_admin_and_malformed_parameters()
     {
         await using var factory = new ApiFactory();
@@ -183,7 +241,8 @@ public sealed class PlatformEventQueryTests
     private static void Seed(IamDbContext database, string publicId, string eventType,
         DateTimeOffset occurredAt, string category = PlatformEventCategories.Administration,
         string outcome = PlatformEventOutcomes.Success, string? resourceId = null,
-        string? correlation = null, IReadOnlyDictionary<string, object?>? metadata = null)
+        string? correlation = null, IReadOnlyDictionary<string, object?>? metadata = null,
+        Guid? actorUserId = null)
     {
         var resource = resourceId is null ? null : new PlatformEventReferenceV1("clip", resourceId);
         var value = new PlatformEventV1(Guid.NewGuid(), eventType, category,
@@ -195,6 +254,7 @@ public sealed class PlatformEventQueryTests
             Id = Guid.NewGuid(),
             PublicId = publicId,
             EventId = value.EventId,
+            ActorUserId = actorUserId,
             SchemaVersion = PlatformEventContract.SchemaVersion,
             EventType = eventType,
             Category = category,

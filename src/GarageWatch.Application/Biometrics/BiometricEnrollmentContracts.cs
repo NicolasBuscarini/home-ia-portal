@@ -7,6 +7,7 @@ public static class BiometricPolicy
 {
     public const int RetentionDays = 365;
     public const int MaximumImageBytes = FaceCropV1.MaximumEncodedBytes;
+    public const int MaximumImageDimension = FaceCropV1.MaximumDimension;
 
     /// <summary>Version of the consent text the account accepted; an enrollment is refused without it.</summary>
     public const string ConsentVersion = "biometric-consent.v1";

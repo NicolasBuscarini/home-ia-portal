@@ -27,7 +27,7 @@ public sealed class CosineIdentityMatcher : IIdentityMatcher
                 skipped++;
                 continue;
             }
-            var score = Cosine(observation.Values, candidate.Values);
+            var score = IdentitySimilarity.Cosine(observation.Values, candidate.Values);
             if (!double.IsFinite(score))
             {
                 skipped++;
@@ -65,22 +65,4 @@ public sealed class CosineIdentityMatcher : IIdentityMatcher
         candidate.Dimensions == observation.Dimensions &&
         candidate.Values.Length == observation.Dimensions;
 
-    private static double Cosine(IReadOnlyList<float> left, IReadOnlyList<float> right)
-    {
-        if (left.Count != right.Count || left.Count == 0) return double.NaN;
-        double dot = 0;
-        double leftNorm = 0;
-        double rightNorm = 0;
-        for (var index = 0; index < left.Count; index++)
-        {
-            var a = left[index];
-            var b = right[index];
-            dot += a * b;
-            leftNorm += a * a;
-            rightNorm += b * b;
-        }
-        if (leftNorm == 0 || rightNorm == 0) return double.NaN;
-        var score = dot / (Math.Sqrt(leftNorm) * Math.Sqrt(rightNorm));
-        return Math.Clamp(score, -1, 1);
-    }
 }

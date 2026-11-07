@@ -19,8 +19,9 @@ public static class FaceImageDecoder
     private const int MaximumPixels = 2048 * 2048;
 
     public static async Task<RgbImage?> DecodeAsync(string ffmpegPath, byte[] encoded, int timeoutSeconds,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, int maximumDimension = 2048)
     {
+        var dimension = Math.Clamp(maximumDimension, 112, 2048);
         var start = new ProcessStartInfo(ffmpegPath)
         {
             UseShellExecute = false,
@@ -31,8 +32,9 @@ public static class FaceImageDecoder
         };
         foreach (var argument in new[]
                  {
-                     "-nostdin", "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-frames:v", "1",
-                     "-f", "image2pipe", "-c:v", "ppm", "-"
+                     "-nostdin", "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
+                     "-vf", $"scale='min({dimension},iw)':'min({dimension},ih)':force_original_aspect_ratio=decrease",
+                     "-frames:v", "1", "-f", "image2pipe", "-c:v", "ppm", "-"
                  })
             start.ArgumentList.Add(argument);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

@@ -7,6 +7,7 @@ public sealed record PlatformEventQuery(
     DateTimeOffset FromUtc,
     DateTimeOffset ToUtc,
     string? Actor,
+    IReadOnlyList<string> ExcludeActors,
     string? EventType,
     string? Category,
     string? Outcome,
@@ -46,6 +47,7 @@ public sealed record PlatformEventPage(IReadOnlyList<PlatformEventListItem> Item
 public sealed record PlatformEventDetail(
     PlatformEventRecordV1 Record,
     string? ActorPublicId,
+    string? ActorUsername,
     string? SubjectPublicId,
     bool IntegrityValid,
     IReadOnlyDictionary<string, JsonElement>? Metadata);

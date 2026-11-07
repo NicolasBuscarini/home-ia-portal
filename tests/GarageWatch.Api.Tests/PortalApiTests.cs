@@ -25,7 +25,13 @@ public sealed class PortalApiTests
             .Select(item => item.GetProperty("moduleId").GetString()).ToArray();
         Assert.Contains("monitoring", adminModules);
         Assert.Contains("activitywatch", adminModules);
+        Assert.Contains("biometrics", adminModules);
         Assert.Contains("administration", adminModules);
+        var adminBiometrics = adminJson.RootElement.GetProperty("modules").EnumerateArray()
+            .Single(item => item.GetProperty("moduleId").GetString() == "biometrics");
+        var adminBiometricsItems = adminBiometrics.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("itemId").GetString()!).ToArray();
+        Assert.Equal(["enrollments", "observations", "calibration", "model"], adminBiometricsItems);
         var adminMonitoring = adminJson.RootElement.GetProperty("modules").EnumerateArray()
             .Single(item => item.GetProperty("moduleId").GetString() == "monitoring");
         var adminMonitoringItems = adminMonitoring.GetProperty("items").EnumerateArray()

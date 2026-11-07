@@ -81,8 +81,8 @@ public sealed class PlatformEventQueryService(IamDbContext database, PlatformEve
         var recorded = new PlatformEventRecordV1(
             entity.PublicId!, entity.RecordedAtUtc ?? entity.OccurredAtUtc,
             entity.PayloadHash ?? string.Empty, value);
-        return new PlatformEventDetail(recorded, actorPublicId, subjectPublicId,
-            integrityValid, ReadMetadata(entity.MetadataJson));
+        return new PlatformEventDetail(recorded, actorPublicId, entity.Actor?.UserName,
+            subjectPublicId, integrityValid, ReadMetadata(entity.MetadataJson));
     }
 
     private IQueryable<PlatformEvent> Filtered(PlatformEventQuery query)
@@ -94,9 +94,24 @@ public sealed class PlatformEventQueryService(IamDbContext database, PlatformEve
         if (!string.IsNullOrWhiteSpace(query.Actor))
         {
             var actor = query.Actor.Trim();
-            events = PlatformEventPublicId.IsValid(actor)
+            events = PublicIdFormat.IsValid(actor, PublicIdPrefixes.UserPrefix)
                 ? events.Where(entry => entry.Actor != null && entry.Actor.PublicId == actor)
                 : events.Where(entry => entry.Actor != null && entry.Actor.UserName!.Contains(actor));
+        }
+
+        if (query.ExcludeActors.Count > 0)
+        {
+            var excludedIds = query.ExcludeActors
+                .Where(value => PublicIdFormat.IsValid(value, PublicIdPrefixes.UserPrefix))
+                .ToArray();
+            var excludedNames = query.ExcludeActors
+                .Where(value => !PublicIdFormat.IsValid(value, PublicIdPrefixes.UserPrefix))
+                .Select(value => value.ToUpperInvariant())
+                .ToArray();
+            events = events.Where(entry => entry.Actor == null
+                || (!excludedIds.Contains(entry.Actor.PublicId!)
+                    && (entry.Actor.NormalizedUserName == null
+                        || !excludedNames.Contains(entry.Actor.NormalizedUserName))));
         }
 
         if (query.EventType is { Length: > 0 } eventType)

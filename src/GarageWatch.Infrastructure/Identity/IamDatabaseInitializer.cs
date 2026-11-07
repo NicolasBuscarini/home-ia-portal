@@ -175,6 +175,27 @@ public sealed class IamDatabaseInitializer(
             });
             seededPortalModule = true;
         }
+        if (!await database.PortalModules.AnyAsync(module => module.ModuleId == "biometrics", cancellationToken))
+        {
+            database.PortalModules.Add(new PortalModule
+            {
+                ModuleId = "biometrics",
+                DisplayNameKey = "modules.biometrics.name",
+                ContractVersion = "1.0",
+                ApiBaseUrl = "/",
+                HealthPath = "/health/ready",
+                RequiredPermission = "biometrics.manage",
+                MenuGroup = "overview",
+                MenuOrder = 30,
+                MenuIcon = "face",
+                MenuLabelKey = "modules.biometrics.menu",
+                IsEnabled = true,
+                Version = 1,
+                CreatedAtUtc = portalNow,
+                UpdatedAtUtc = portalNow
+            });
+            seededPortalModule = true;
+        }
         if (seededPortalModule) await database.SaveChangesAsync(cancellationToken);
 
         await EnsurePortalSubmodulesAsync(cancellationToken);
@@ -251,6 +272,10 @@ public sealed class IamDatabaseInitializer(
             ("monitoring", "capture", "dashboard.menu.capture", 60, "admin.configuration.manage"),
             ("monitoring", "cameras", "dashboard.menu.cameras", 70, "admin.configuration.manage"),
             ("monitoring", "people", "dashboard.menu.people", 80, "admin.configuration.manage"),
+            ("biometrics", "enrollments", "dashboard.menu.biometricEnrollments", 10, "biometrics.manage"),
+            ("biometrics", "observations", "dashboard.menu.biometricObservations", 20, "biometrics.manage"),
+            ("biometrics", "calibration", "dashboard.menu.biometricCalibration", 30, "biometrics.manage"),
+            ("biometrics", "model", "dashboard.menu.biometricModel", 40, "admin.configuration.manage"),
             ("administration", "users", "dashboard.menu.users", 10, "admin.users.manage"),
             ("administration", "profiles", "dashboard.menu.profiles", 20, "admin.permissions.manage"),
             ("administration", "requests", "dashboard.menu.accessRequests", 30, "admin.users.manage"),

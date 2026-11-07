@@ -8,6 +8,12 @@ public sealed record BiometricEnrollmentResponse(string PublicId, string UserPub
     string ModelId, string ModelVersion, int Dimensions, string KeyVersion, string ConsentVersion,
     DateTimeOffset ConsentAcceptedAtUtc, string? PersonPublicId);
 
+public sealed record VerifyBiometricEnrollmentRequest(string? MediaType, int? Width, int? Height,
+    string? ImageBase64);
+
+public sealed record BiometricVerificationResponse(bool Matches, double Score, double Threshold,
+    string ModelId, string ModelVersion, string EmbeddingSchemaVersion, int Dimensions);
+
 public sealed record LinkBiometricPersonRequest(string? PersonPublicId);
 
 public sealed record BiometricPersonLinkResponse(string EnrollmentPublicId, string PersonPublicId,

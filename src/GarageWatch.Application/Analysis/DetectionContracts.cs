@@ -42,13 +42,19 @@ public interface IObjectTracker
 }
 
 /// <summary>Versioned, model-neutral boundary for a face crop already selected by an authorized local workflow.</summary>
+/// <remarks>
+/// Uploads may arrive larger than the detector input. Consumers must bound decoding
+/// (see <c>FaceImageDecoder</c>) and downscale before inference; the limits here only
+/// bound the accepted transport payload.
+/// </remarks>
 public sealed record FaceCropV1(string MediaType, int Width, int Height, ReadOnlyMemory<byte> EncodedImage)
 {
     public const string SchemaVersion = "face-crop.v1";
-    public const int MaximumEncodedBytes = 2 * 1024 * 1024;
+    public const int MaximumEncodedBytes = 12 * 1024 * 1024;
+    public const int MaximumDimension = 6000;
 
     public bool IsValid => (MediaType is "image/jpeg" or "image/png") &&
-        Width is > 0 and <= 2048 && Height is > 0 and <= 2048 &&
+        Width is > 0 and <= MaximumDimension && Height is > 0 and <= MaximumDimension &&
         !EncodedImage.IsEmpty && EncodedImage.Length <= MaximumEncodedBytes;
 }
 

@@ -11,6 +11,13 @@ public sealed record MonitoringAnalysisJob(string PublicId, string ClipPublicId,
 
 public sealed record MonitoringAnalysisJobStatus(string ClipPublicId, string State, string? Outcome);
 
+public sealed record MonitoringAnalysisObject(string ClassName, int ClassId, float Score, float X1, float Y1,
+    float X2, float Y2, int FrameIndex);
+
+public sealed record MonitoringAnalysisResult(string SchemaVersion, string ClipPublicId, string CameraId,
+    string AnalysisVersion, string ModelVersion, int FramesAnalyzed,
+    IReadOnlyList<MonitoringAnalysisObject> Objects, DateTimeOffset ProcessedAtUtc);
+
 public sealed class MonitoringAnalysisConflictException(string code) : Exception(code);
 
 public sealed class MonitoringAnalysisDeniedException(string code) : Exception(code);
@@ -34,4 +41,7 @@ public interface IMonitoringAnalysisClient
 
     Task<IReadOnlyList<MonitoringAnalysisJobStatus>?> LatestForClipsAsync(
         IReadOnlyCollection<string> clipPublicIds, CancellationToken cancellationToken = default);
+
+    Task<MonitoringAnalysisResult?> GetResultAsync(string clipPublicId,
+        CancellationToken cancellationToken = default);
 }

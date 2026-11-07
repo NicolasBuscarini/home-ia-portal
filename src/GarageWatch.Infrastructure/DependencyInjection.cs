@@ -78,8 +78,10 @@ public static class DependencyInjection
         services.AddScoped<IPortalModuleHealthProbe, MonitoringModuleHealthProbe>();
         services.AddScoped<IPortalModuleHealthProbe, ActivityWatchHealthProbe>();
         services.AddSingleton<IPortalModuleHealthProbe>(new InProcessModuleHealthProbe("administration"));
+        services.AddSingleton<IPortalModuleHealthProbe>(new InProcessModuleHealthProbe("biometrics"));
         services.AddScoped<AccessRequestService>();
         services.AddScoped<ClipAnalysisDispatchService>();
+        services.AddScoped<ClipDeletionService>();
         services.AddScoped<CameraClipTriggerConfigurationService>();
         services.AddScoped<KnownPersonService>();
         services.AddScoped<RemoteKnownPeopleGateway>();
@@ -97,6 +99,7 @@ public static class DependencyInjection
                 ? provider.GetRequiredService<LocalIdentityEmbeddingSource>()
                 : provider.GetRequiredService<RemoteIdentityEmbeddingSource>());
         services.AddScoped<IdentityMatchService>();
+        services.AddScoped<BiometricVerificationService>();
         services.AddScoped<IIdentityMatchPolicySource, IdentityMatchPolicySource>();
         services.AddScoped<IdentityCalibrationService>();
         services.AddScoped<IdentityTriageService>();
@@ -216,6 +219,7 @@ public static class DependencyInjection
         services.AddSingleton<ClipPlaybackCache>();
         services.AddScoped<ClipLibraryService>();
         services.AddSingleton<IClipAnalysisAutoDispatcher, ClipAnalysisAutoDispatcher>();
+        services.AddSingleton<IHostedService, ClipAnalysisReconciliationWorker>();
         services.AddSingleton<ClipTriggerWorker>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ClipTriggerWorker>());
         services.AddSingleton<SpoolWatcherWorker>();

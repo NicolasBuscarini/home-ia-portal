@@ -7,5 +7,8 @@ public sealed record ClipListItemResponse(string PublicId, string CameraId, Date
 public sealed record ClipPageResponse(IReadOnlyList<ClipListItemResponse> Items, int Page, int PageSize, int Total);
 public sealed record ClipDetailsResponse(ClipListItemResponse Clip, string? MediaUrl, string? MediaSha256,
     string? ThumbnailSha256, int AttemptCount, DateTimeOffset UpdatedAtUtc);
+public sealed record ClipAnalysisObjectResponse(string ClassName, int ClassId, float Score, int FrameIndex);
+public sealed record ClipAnalysisResultResponse(string ClipPublicId, string AnalysisVersion, string ModelVersion,
+    int FramesAnalyzed, DateTimeOffset ProcessedAtUtc, IReadOnlyList<ClipAnalysisObjectResponse> Objects);
 public sealed record UpdateClipRetentionRequest(long ExpectedVersion, int RetentionDays, int? MaximumStorageGigabytes);
 public sealed record UpdateClipPreservationRequest(long ExpectedVersion, bool IsPreserved);

@@ -284,5 +284,8 @@ public sealed class IdentityCalibrationApiTests
         public Task<IdentityEmbeddingSnapshot> LoadAsync(FaceObservationV1 observation,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new IdentityEmbeddingSnapshot([], 0));
+
+        public Task<IdentityEnrollmentEmbedding?> LoadEnrollmentAsync(string enrollmentPublicId,
+            CancellationToken cancellationToken = default) => Task.FromResult<IdentityEnrollmentEmbedding?>(null);
     }
 }

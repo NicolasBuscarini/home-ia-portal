@@ -206,11 +206,27 @@ public sealed class BiometricEnrollmentApiTests
             EnrollmentBody() with { MediaType = "image/gif" });
         Assert.Equal(HttpStatusCode.BadRequest, badMedia.StatusCode);
         using var badSize = await client.PostAsJsonAsync("/api/v1/biometrics/enrollments",
-            EnrollmentBody() with { Width = 4096 });
+            EnrollmentBody() with { Width = 6001 });
         Assert.Equal(HttpStatusCode.BadRequest, badSize.StatusCode);
 
         using (var scope = factory.Services.CreateScope())
             Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<IamDbContext>().BiometricEnrollments.CountAsync());
+    }
+
+    [Fact]
+    public async Task Large_upload_dimensions_are_accepted_for_compaction()
+    {
+        var biometrics = new FakeBiometricClient();
+        await using var factory = ConfiguredFactory(biometrics: biometrics);
+        using var client = factory.CreateClient();
+        await RegisterAsync(client, "bio-large");
+        await LoginAsync(client, "bio-large");
+
+        using var accepted = await client.PostAsJsonAsync("/api/v1/biometrics/enrollments",
+            EnrollmentBody() with { Width = 4096, Height = 3000 });
+        var body = await accepted.Content.ReadAsStringAsync();
+        Assert.True(accepted.StatusCode == HttpStatusCode.Created, body);
+        Assert.Single(biometrics.Enrollments);
     }
 
     private static WebApplicationFactory<Program> ConfiguredFactory(bool withExtractor = true, bool withKey = true,

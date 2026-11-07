@@ -32,7 +32,7 @@ public sealed class OnnxFaceEnrollmentExtractor : Application.Biometrics.IFaceEn
         if (!_runtime.Status.Enabled)
             throw new Application.Biometrics.FaceExtractionException("face_extractor_not_configured");
         var image = await FaceImageDecoder.DecodeAsync(_capture.FfmpegPath, crop.EncodedImage.ToArray(),
-            _runtime.Options.TimeoutSeconds, cancellationToken);
+            _runtime.Options.TimeoutSeconds, cancellationToken, maximumDimension: 1600);
         if (image is null) throw new Application.Biometrics.FaceExtractionException("image_decode_failed");
 
         var faces = _detector.Value.Detect(image);

@@ -30,7 +30,10 @@ public sealed class PortalHealthApiTests
 
         var modules = json.RootElement.GetProperty("modules").EnumerateArray()
             .ToDictionary(item => item.GetProperty("moduleId").GetString()!);
-        Assert.Equal(3, modules.Count);
+        Assert.Equal(4, modules.Count);
+        var biometrics = modules["biometrics"];
+        Assert.Equal("module", biometrics.GetProperty("kind").GetString());
+        Assert.Equal("healthy", biometrics.GetProperty("status").GetString());
         var monitoring = modules["monitoring"];
         Assert.Equal("module", monitoring.GetProperty("kind").GetString());
         Assert.Equal("healthy", monitoring.GetProperty("status").GetString());

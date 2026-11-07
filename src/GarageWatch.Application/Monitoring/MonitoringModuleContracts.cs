@@ -62,6 +62,11 @@ public interface IMonitoringClipsClient
 
     Task<MonitoringClipItem?> GetAsync(string publicId, CancellationToken cancellationToken = default);
 
+    Task<MonitoringClipDeleteResult> DeleteAsync(string publicId,
+        CancellationToken cancellationToken = default);
+
+    Task<MonitoringClipDeleteAllResult?> DeleteAllAsync(CancellationToken cancellationToken = default);
+
     Task<HttpResponseMessage?> GetThumbnailAsync(string publicId,
         CancellationToken cancellationToken = default);
 
@@ -79,6 +84,13 @@ public sealed record MonitoringClipItem(string PublicId, string ClipId, string C
     int AttemptCount, DateTimeOffset UpdatedAtUtc, long? SizeBytes);
 
 public sealed record MonitoringClipPage(IReadOnlyList<MonitoringClipItem> Items, int Page, int PageSize, int Total);
+
+public enum MonitoringClipDeleteStatus { Deleted, NotFound, Preserved, Archived, NotReady, Failed, Unavailable }
+
+public sealed record MonitoringClipDeleteResult(MonitoringClipDeleteStatus Status, string? Error = null);
+
+public sealed record MonitoringClipDeleteAllResult(int Deleted, int SkippedPreserved, int SkippedArchived,
+    int SkippedNotReady, int SkippedActiveAnalysis, int Failed);
 
 public interface IMonitoringCaptureClient
 {
