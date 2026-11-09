@@ -7,15 +7,16 @@ namespace GarageWatch.Infrastructure.Biometrics;
 public static class FaceAlignment
 {
     public const int OutputSize = 112;
-    private const float ReferenceScale = 112f;
 
+    // Template landmarks in output pixels (0..111). Warp() iterates pixel coordinates, so the reference
+    // must stay in pixel space; normalizing it would invert to coordinates ~112x outside the source image.
     private static readonly FacePoint[] Reference =
     [
-        new(38.2946f / ReferenceScale, 51.6963f / ReferenceScale),
-        new(73.5318f / ReferenceScale, 51.5014f / ReferenceScale),
-        new(56.0252f / ReferenceScale, 71.7366f / ReferenceScale),
-        new(41.5493f / ReferenceScale, 92.3655f / ReferenceScale),
-        new(70.7299f / ReferenceScale, 92.2041f / ReferenceScale)
+        new(38.2946f, 51.6963f),
+        new(73.5318f, 51.5014f),
+        new(56.0252f, 71.7366f),
+        new(41.5493f, 92.3655f),
+        new(70.7299f, 92.2041f)
     ];
 
     /// <summary>

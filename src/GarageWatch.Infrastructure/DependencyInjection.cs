@@ -15,6 +15,8 @@ using GarageWatch.Infrastructure.Identity.Repositories;
 using GarageWatch.Infrastructure.Integrations;
 using GarageWatch.Infrastructure.Analysis;
 using GarageWatch.Application.Analysis;
+using GarageWatch.Application.Maintenance;
+using GarageWatch.Infrastructure.Maintenance;
 using GarageWatch.Infrastructure.Events;
 using GarageWatch.Application.Events;
 using Microsoft.AspNetCore.Identity;
@@ -35,6 +37,7 @@ public static class DependencyInjection
         services.AddSingleton<IBiometricDataProtector, Biometrics.AesGcmBiometricDataProtector>();
         services.AddSingleton<IIntegrationCredentialProtector, Integrations.AesGcmIntegrationCredentialProtector>();
         services.AddScoped<IIntegrationCredentialStore, Integrations.IntegrationCredentialStore>();
+        services.AddSingleton<IPortalBackupService, Maintenance.PortalBackupService>();
         services.AddDbContext<IamDbContext>((provider, options) =>
         {
             var settings = provider.GetRequiredService<IConfiguration>();
@@ -187,6 +190,7 @@ public static class DependencyInjection
         // O assembler remoto de clipes é singleton; o cliente não mantém estado e só usa
         // IHttpClientFactory + options, ambos singleton, então também é registrado como singleton.
         services.AddSingleton<IMonitoringClipMediaClient, MonitoringClipMediaClient>();
+        services.AddSingleton<IMonitoringClipFramesClient, MonitoringClipFramesClient>();
         services.AddSingleton<IMonitoringEventsClient, MonitoringEventsClient>();
         services.AddSingleton<RemoteEventJournal>();
         var activityWatchOptions = ActivityWatchOptions.FromConfiguration(configuration);

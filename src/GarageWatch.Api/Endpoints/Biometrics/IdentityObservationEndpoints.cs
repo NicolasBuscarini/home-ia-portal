@@ -65,7 +65,7 @@ public sealed class ListIdentityObservationsEndpoint() : BaseEndpoint("Biometric
 {
     protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/v1/admin/identity-observations", async (string? matchStatus, string? reviewStatus,
-            string? cameraPublicId, int? page, int? pageSize, IdentityTriageService triage,
+            string? cameraPublicId, string? clipPublicId, int? page, int? pageSize, IdentityTriageService triage,
             CancellationToken cancellationToken) =>
         {
             IdentityMatchStatus? match = null;
@@ -85,8 +85,8 @@ public sealed class ListIdentityObservationsEndpoint() : BaseEndpoint("Biometric
 
             try
             {
-                var result = await triage.ListAsync(match, review, cameraPublicId, page ?? 1, pageSize ?? 50,
-                    cancellationToken);
+                var result = await triage.ListAsync(match, review, cameraPublicId, clipPublicId, page ?? 1,
+                    pageSize ?? 50, cancellationToken);
                 return Results.Ok(result);
             }
             catch (ArgumentException)

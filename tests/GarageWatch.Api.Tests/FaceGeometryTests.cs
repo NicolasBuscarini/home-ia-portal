@@ -57,11 +57,11 @@ public sealed class FaceGeometryTests
         var sin = MathF.Sin(angle);
         FacePoint[] template =
         [
-            new(38.2946f / 112f, 51.6963f / 112f),
-            new(73.5318f / 112f, 51.5014f / 112f),
-            new(56.0252f / 112f, 71.7366f / 112f),
-            new(41.5493f / 112f, 92.3655f / 112f),
-            new(70.7299f / 112f, 92.2041f / 112f)
+            new(38.2946f, 51.6963f),
+            new(73.5318f, 51.5014f),
+            new(56.0252f, 71.7366f),
+            new(41.5493f, 92.3655f),
+            new(70.7299f, 92.2041f)
         ];
         var detected = template
             .Select(point => new FacePoint(
@@ -76,8 +76,8 @@ public sealed class FaceGeometryTests
                           transform.OffsetX;
             var mappedY = transform.Scale * (transform.Sin * detected[index].X + transform.Cos * detected[index].Y) +
                           transform.OffsetY;
-            Assert.Equal(point.X, mappedX, 3);
-            Assert.Equal(point.Y, mappedY, 3);
+            Assert.Equal(point.X, mappedX, 2);
+            Assert.Equal(point.Y, mappedY, 2);
         }
     }
 
@@ -93,6 +93,32 @@ public sealed class FaceGeometryTests
         Assert.Equal(3 * 112 * 112, tensor.Length);
         var expected = (255f - 127.5f) / 128f;
         Assert.All(tensor, value => Assert.Equal(expected, value, 4));
+    }
+
+    [Fact]
+    public void Warp_samples_the_source_image_instead_of_a_constant_black_tensor()
+    {
+        var pixels = new byte[112 * 112 * 3];
+        for (var y = 0; y < 112; y++)
+            for (var x = 0; x < 112; x++)
+            {
+                var offset = (y * 112 + x) * 3;
+                pixels[offset] = (byte)x;
+                pixels[offset + 1] = (byte)y;
+                pixels[offset + 2] = (byte)((x + y) % 256);
+            }
+        var image = new RgbImage(112, 112, pixels);
+        FacePoint[] template =
+        [
+            new(38.2946f, 51.6963f), new(73.5318f, 51.5014f), new(56.0252f, 71.7366f),
+            new(41.5493f, 92.3655f), new(70.7299f, 92.2041f)
+        ];
+
+        var tensor = FaceAlignment.Warp(image, FaceAlignment.Fit(template));
+
+        Assert.True(tensor.Distinct().Count() > 1);
+        Assert.Equal((20f - 127.5f) / 128f, tensor[10 * 112 + 20], 2);
+        Assert.Equal((10f - 127.5f) / 128f, tensor[112 * 112 + 10 * 112 + 20], 2);
     }
 
     [Fact]

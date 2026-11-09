@@ -45,6 +45,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly GarageWatch.Application.Monitoring.IMonitoringBiometricClient? _monitoringBiometricClient;
     private readonly GarageWatch.Application.Monitoring.IMonitoringModuleClient? _monitoringModuleClient;
     private readonly GarageWatch.Application.Monitoring.IMonitoringLiveClient? _monitoringLiveClient;
+    private readonly GarageWatch.Application.Monitoring.IMonitoringClipFramesClient? _monitoringClipFramesClient;
     private readonly GarageWatch.Application.Portal.IActivityWatchModule? _activityWatchModule;
     private readonly string _activityWatchBaseUrl;
     private readonly int _eventIngestRateLimit;
@@ -69,6 +70,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         GarageWatch.Application.Monitoring.IMonitoringRetentionClient? monitoringRetentionClient = null,
         string monitoringLiveSource = "local",
         GarageWatch.Application.Monitoring.IMonitoringLiveClient? monitoringLiveClient = null,
+        GarageWatch.Application.Monitoring.IMonitoringClipFramesClient? monitoringClipFramesClient = null,
         GarageWatch.Application.Monitoring.IMonitoringModuleClient? monitoringModuleClient = null,
         string monitoringBiometricsSource = "local",
         GarageWatch.Application.Monitoring.IMonitoringBiometricClient? monitoringBiometricClient = null,
@@ -99,6 +101,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         _monitoringBiometricsSource = monitoringBiometricsSource;
         _monitoringLiveSource = monitoringLiveSource;
         _monitoringLiveClient = monitoringLiveClient;
+        _monitoringClipFramesClient = monitoringClipFramesClient;
         _monitoringModuleClient = monitoringModuleClient;
         _monitoringCaptureClient = monitoringCaptureClient;
         _monitoringClipsClient = monitoringClipsClient;
@@ -181,6 +184,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringLiveClient>();
                 services.AddSingleton(_monitoringLiveClient);
+            }
+            if (_monitoringClipFramesClient is not null)
+            {
+                services.RemoveAll<GarageWatch.Application.Monitoring.IMonitoringClipFramesClient>();
+                services.AddSingleton(_monitoringClipFramesClient);
             }
             if (_monitoringCaptureClient is not null)
             {

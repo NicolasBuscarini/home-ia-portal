@@ -5,6 +5,7 @@ using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
+using GarageWatch.Application.Monitoring;
 using GarageWatch.Infrastructure.Identity;
 
 namespace GarageWatch.Infrastructure.Capture;
@@ -18,6 +19,10 @@ public sealed class ClipTriggerWorker : BackgroundService
     private readonly Channel<SegmentManifestV1> queue;
     private readonly List<PendingClip> pending = [];
     private readonly IPublicIdGenerator publicIds;
+    private static readonly TimeSpan CaptureStatusCache = TimeSpan.FromSeconds(5);
+    private DateTimeOffset captureStatusCheckedAt = DateTimeOffset.MinValue;
+    private bool captureStatusAvailable;
+    private string? captureStatusEpoch;
     private DateTimeOffset lastTriggerAt = DateTimeOffset.MinValue;
 
     public ClipTriggerWorker(CaptureOptions capture, ClipTriggerOptions options, LocalSegmentSpool spool,
@@ -51,6 +56,11 @@ public sealed class ClipTriggerWorker : BackgroundService
     private IClipAnalysisAutoDispatcher? AnalysisDispatcher { get; }
     private IServiceScopeFactory? ScopeFactory { get; }
 
+    public static bool IsSegmentFromActiveCapture(string authority, string? activeEpoch, string segmentEpoch) =>
+        !string.Equals(authority, "remote", StringComparison.OrdinalIgnoreCase)
+        || (!string.IsNullOrWhiteSpace(activeEpoch)
+            && string.Equals(segmentEpoch, activeEpoch, StringComparison.Ordinal));
+
     public bool TryEnqueue(SegmentManifestV1 segment)
     {
         var accepted = (ScopeFactory is not null || Options.Enabled) && queue.Writer.TryWrite(segment);
@@ -64,6 +74,11 @@ public sealed class ClipTriggerWorker : BackgroundService
         await RecoverPendingAsync(stoppingToken);
         await foreach (var segment in queue.Reader.ReadAllAsync(stoppingToken))
         {
+            if (!await IsSegmentFromCurrentCaptureAsync(segment, stoppingToken))
+            {
+                Observations.Add(1, new TagList { { "outcome", "inactive_capture" } });
+                continue;
+            }
             await AdvancePendingAsync(segment, stoppingToken);
             if (!await IsTriggerEnabledAsync(stoppingToken)) continue;
             if (HasClipInProgress())
@@ -131,6 +146,37 @@ public sealed class ClipTriggerWorker : BackgroundService
 
     private bool HasClipInProgress() =>
         pending.Count > 0 || ReadManifests().Any(clip => clip.State == "collecting");
+
+    private async Task<bool> IsSegmentFromCurrentCaptureAsync(SegmentManifestV1 segment,
+        CancellationToken cancellationToken)
+    {
+        if (ScopeFactory is null || !string.Equals(Capture.Authority, "remote", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var now = DateTimeOffset.UtcNow;
+        if (now - captureStatusCheckedAt >= CaptureStatusCache)
+        {
+            captureStatusCheckedAt = now;
+            try
+            {
+                await using var scope = ScopeFactory.CreateAsyncScope();
+                var monitoring = scope.ServiceProvider.GetRequiredService<IMonitoringModuleClient>();
+                var status = await monitoring.GetCameraStatusAsync(Capture.CameraId, cancellationToken);
+                captureStatusAvailable = status.Reachable
+                    && string.Equals(status.Status, "capturing", StringComparison.OrdinalIgnoreCase);
+                captureStatusEpoch = status.StreamEpoch;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception exception)
+            {
+                Logger.LogWarning("Status de captura indisponível; segmento será ignorado. motivo={FailureType}",
+                    exception.GetType().Name);
+                captureStatusAvailable = false;
+                captureStatusEpoch = null;
+            }
+        }
+        return captureStatusAvailable
+            && IsSegmentFromActiveCapture(Capture.Authority, captureStatusEpoch, segment.StreamEpoch);
+    }
 
     private async Task StartClipAsync(SegmentManifestV1 segment, CancellationToken cancellationToken)
     {

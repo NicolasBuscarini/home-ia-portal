@@ -100,18 +100,22 @@ public sealed class IdentityTriageService(
     }
 
     public async Task<IdentityObservationPage> ListAsync(IdentityMatchStatus? matchStatus,
-        IdentityObservationReviewStatus? reviewStatus, string? cameraPublicId, int page, int pageSize,
-        CancellationToken cancellationToken)
+        IdentityObservationReviewStatus? reviewStatus, string? cameraPublicId, string? clipPublicId, int page,
+        int pageSize, CancellationToken cancellationToken)
     {
         if (page < 1 || pageSize is < 1 or > 100) throw new ArgumentException("invalid_pagination");
         if (cameraPublicId is not null &&
             !PublicIdFormat.IsValid(cameraPublicId, PublicIdPrefixes.CameraPrefix))
             throw new ArgumentException("invalid_camera");
+        if (clipPublicId is not null &&
+            !PublicIdFormat.IsValid(clipPublicId, PublicIdPrefixes.ClipPrefix))
+            throw new ArgumentException("invalid_clip");
 
         var query = database.IdentityObservations.AsNoTracking();
         if (matchStatus is { } match) query = query.Where(item => item.MatchStatus == (int)match);
         if (reviewStatus is { } review) query = query.Where(item => item.ReviewStatus == (int)review);
         if (cameraPublicId is not null) query = query.Where(item => item.CameraPublicId == cameraPublicId);
+        if (clipPublicId is not null) query = query.Where(item => item.ClipPublicId == clipPublicId);
 
         var total = await query.CountAsync(cancellationToken);
         var offset = ((long)page - 1) * pageSize;

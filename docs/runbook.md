@@ -62,3 +62,21 @@ Procedimento de contexto e limites adicionais: [guia compartilhado de execução
 ## Frontend React em HMR (opt-in)
 
 Na operação via contexto compartilhado, `GARAGE_WEB_HMR=true` é padrão. `./garage up` inicia o profile Vite nos modos synthetic e camera e imprime a URL; acesse `http://127.0.0.1:5173` (ou a porta configurada, usando `:` antes da porta) para receber Fast Refresh/HMR das mudanças no clone independente `projects/home-ia-web`. Se a API já estiver ativa sem HMR, use `./garage web`, que sobe somente o Vite e o conecta à API existente. O volume dev aponta ao clone `home-ia-web`; o build estático de API/produção usa o mesmo contexto `../home-ia-web` e o pacote `../home-ia-shared`. O submodule/fallback `web/` foi removido. `GARAGE_WEB_HMR=false` usa só o bundle compilado. O proxy Vite encaminha same-origin para API/health e o cookie continua HttpOnly. Só publique no loopback. O profile Vite não depende nem inicia outra API e o wrapper não roda HMR em `t00a`. HMR é dev-only e não recarrega alterações backend.
+
+## Backup e restore do banco do portal (T11)
+
+Política (docs/operacao/07 do contexto): backup diário e consistente de metadados; meta RPO ≤ 24 h e RTO ≤ 4 h; **biometria cifrada não entra em backup** (ADR072) — a recuperação é recadastrar o rosto. O banco do portal tem IAM, perfis, auditoria (`PlatformEvents`), observações de identidade minimizadas (sem imagem/embedding) e versões de política de matching.
+
+**Backup sob demanda:** autenticar como Administrador, enviar `POST /api/v1/admin/maintenance/backups` com Origin same-origin e conferir `fileName`, `sizeBytes` e `sha256`; `GET /api/v1/admin/maintenance/backups` lista os artefatos. O arquivo aparece em `PORTAL_BACKUP_DIRECTORY` (padrão `backups/` ao lado de `IDENTITY_DB_PATH`) com um manifesto `.db.json`. Copie o par (`.db` + manifesto) para o destino independente e registre o `sha256`; o Compose mantém o diretório no volume do portal por padrão, então aponte a variável para um bind mount externo quando for usar esse caminho como cópia real.
+
+**Restore (procedimento do operador, serviço parado):**
+
+1. Registrar o estado atual (`./home-ia status`, health e contagens) e confirmar que nenhuma captura real está em andamento.
+2. Parar a API do portal (não apague volumes).
+3. Preservar o banco atual como `.db.replaced-<data>` e remover `-wal`/`-shm` remanescentes do arquivo substituído.
+4. Copiar o `.db` escolhido para `IDENTITY_DB_PATH`, conferir o `sha256` com o manifesto e, só então, iniciar a API.
+5. Verificar `/health/ready`, login do administrador, `GET /api/v1/admin/events` (integridade dos eventos) e a projeção de navegação antes de reabrir o uso.
+6. Reconciliar o spool do Monitoramento (clipes/manifestos/análise/biometria) com o banco restaurado: eventos e referências públicas dos dois lados precisam apontar para os mesmos recursos; registrar órfãos e mídia ausente em vez de apagar.
+7. Se o restore for de um banco anterior a uma revogação/expiração biométrica, a biometria **não** volta: a inscrição precisa ser refeita pelo titular.
+
+**Ensaio periódico:** trimestralmente, restaurar um artefato em ambiente isolado e cronometrar o passo a passo; guardar data, artefato (`sha256`) e resultado. Sem esse ensaio, o backup não conta como recuperação comprovada.

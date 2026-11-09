@@ -138,6 +138,43 @@ public sealed class IdentityTriageApiTests
     }
 
     [Fact]
+    public async Task Admin_filters_observations_by_clip()
+    {
+        await using var factory = ConfiguredFactory();
+        using var service = factory.CreateClient();
+        service.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+            Mint(IdentityObservationScopes.Write));
+
+        using (var first = await service.PostAsJsonAsync("/api/v1/monitoring/identity-observations",
+                   ObservationBody("CLP000000000002")))
+            Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        using (var second = await service.PostAsJsonAsync("/api/v1/monitoring/identity-observations",
+                   ObservationBody("CLP000000000003")))
+            Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+
+        using var admin = factory.CreateClient();
+        await LoginAsync(admin, "contract-user", "Contract-Password-123!");
+
+        using var firstPage = await admin.GetAsync(
+            "/api/v1/admin/identity-observations?clipPublicId=CLP000000000002");
+        Assert.Equal(HttpStatusCode.OK, firstPage.StatusCode);
+        using var firstBody = JsonDocument.Parse(await firstPage.Content.ReadAsStringAsync());
+        Assert.Equal(1, firstBody.RootElement.GetProperty("total").GetInt32());
+        Assert.Equal("CLP000000000002",
+            firstBody.RootElement.GetProperty("items")[0].GetProperty("clipPublicId").GetString());
+
+        using var secondPage = await admin.GetAsync(
+            "/api/v1/admin/identity-observations?clipPublicId=CLP000000000003");
+        Assert.Equal(HttpStatusCode.OK, secondPage.StatusCode);
+        using var secondBody = JsonDocument.Parse(await secondPage.Content.ReadAsStringAsync());
+        Assert.Equal(1, secondBody.RootElement.GetProperty("total").GetInt32());
+
+        using var invalid = await admin.GetAsync(
+            "/api/v1/admin/identity-observations?clipPublicId=not-a-clip");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+    }
+
+    [Fact]
     public async Task Ingest_requires_the_monitoring_identity_scope_and_review_requires_privilege()
     {
         await using var factory = ConfiguredFactory();
@@ -289,7 +326,7 @@ public sealed class IdentityTriageApiTests
             });
         });
 
-    private static object ObservationBody() => new
+    private static object ObservationBody(string clipPublicId = "CLP000000000002") => new
     {
         schemaVersion = FaceObservationV1.CurrentSchemaVersion,
         modelId = "test-face-model",
@@ -298,7 +335,7 @@ public sealed class IdentityTriageApiTests
         dimensions = 3,
         values = new[] { 0.1f, 0.2f, 0.3f },
         cameraPublicId = "CAM000000000002",
-        clipPublicId = "CLP000000000002",
+        clipPublicId,
         observedAtUtc = DateTimeOffset.UtcNow
     };
 

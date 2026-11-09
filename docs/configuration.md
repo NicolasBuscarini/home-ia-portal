@@ -46,3 +46,6 @@ A triagem de identidade (`T09`) tem expurgo próprio: `IDENTITY_OBSERVATION_RETE
 
 
 T17-C adiciona a ingestão `POST /api/v1/events`: `EVENT_INGEST_RATE_LIMIT_PER_MINUTE` (1–10000, padrão 120, por usuário autenticado ou IP) e `EVENT_SERVICE_TOKEN_AUDIENCE` (padrão `home-ia-portal`). Serviços reutilizam `MONITORING_SERVICE_TOKEN_SECRET` (mínimo 32 bytes) e `PORTAL_RESIDENCE_ID`; o token precisa de escopo `events.write` e `sub` `monitoring`/`system`. A sessão do navegador usa a claim `session_id`; cookies antigos caem em fingerprint SHA-256 unidirecional do cookie, que nunca é armazenado. Corpo máximo de 16 KiB, um evento por requisição; falha de autenticação não grava e erros não ecoam payload.
+## Backup do banco do portal
+
+`PORTAL_BACKUP_DIRECTORY` define o diretório absoluto dos backups do SQLite do portal; quando ausente, o padrão é `backups/` ao lado de `IDENTITY_DB_PATH`. Para cumprir a política de cópia independente, aponte a variável para um volume montado fora do volume de dados do portal (host/NAS) e mantenha a chave de cifragem de backups separada. O diretório precisa ser gravável pelo usuário do processo (`HOST_UID`/`HOST_GID` no Compose).
