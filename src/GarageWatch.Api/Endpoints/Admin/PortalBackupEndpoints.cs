@@ -2,6 +2,7 @@ using GarageWatch.Api.Errors;
 using GarageWatch.Application.Authorization;
 using GarageWatch.Application.Maintenance;
 using GarageWatch.Application.PlatformEvents;
+using GarageWatch.Infrastructure.Maintenance;
 
 namespace GarageWatch.Api.Endpoints.Admin;
 
@@ -51,5 +52,33 @@ public sealed class ListPortalBackupsEndpoint() : BaseEndpoint("Maintenance", "L
             })
             .RequireAuthorization(PermissionPolicy.Name("admin.configuration.manage"))
             .Produces<PortalBackupArtifact[]>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
+}
+
+public sealed class GetPortalBackupSummaryEndpoint() : BaseEndpoint("Maintenance", "GetPortalBackupSummary",
+    "Summarize portal database backups",
+    "Returns the newest verified backup (from the durable manifests), the retained set size, the scheduling posture and the last in-process failure, without opening or serving the database content.")
+{
+    protected override RouteHandlerBuilder MapCore(IEndpointRouteBuilder routes) =>
+        routes.MapGet("/api/v1/admin/maintenance/backups/summary", async (IPortalBackupService backups,
+                PortalBackupScheduleOptions options, PortalBackupMetrics metrics,
+                CancellationToken cancellationToken) =>
+            {
+                var artifacts = await backups.ListAsync(cancellationToken);
+                var latest = artifacts.FirstOrDefault();
+                return Results.Ok(new PortalBackupSummary(
+                    latest?.CreatedAtUtc,
+                    latest?.FileName,
+                    latest?.SizeBytes,
+                    latest?.Sha256,
+                    artifacts.Count,
+                    artifacts.Sum(item => item.SizeBytes),
+                    options.Enabled,
+                    options.IntervalHours,
+                    options.RetentionCount,
+                    metrics.LastFailureAtUtc));
+            })
+            .RequireAuthorization(PermissionPolicy.Name("admin.configuration.manage"))
+            .Produces<PortalBackupSummary>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
 }

@@ -22,6 +22,23 @@ public sealed record PortalRestoreResult(
     int TableCount);
 
 /// <summary>
+/// Read-only observability summary of the portal backups: the newest verified artifact (from the
+/// durable manifests), the retained set, the scheduling posture and the last in-process failure.
+/// It never carries the database content, the encryption key or free-text error details.
+/// </summary>
+public sealed record PortalBackupSummary(
+    DateTimeOffset? LastSuccessAtUtc,
+    string? LastSuccessFileName,
+    long? LastSuccessSizeBytes,
+    string? LastSuccessSha256,
+    int ArtifactCount,
+    long TotalSizeBytes,
+    bool ScheduleEnabled,
+    int ScheduleIntervalHours,
+    int ScheduleRetentionCount,
+    DateTimeOffset? LastFailureAtUtc);
+
+/// <summary>
 /// Consistent backup and isolated restore of the portal SQLite database. Restore to the live path
 /// stays an operator procedure with the services stopped; <see cref="RestoreAsync"/> only proves,
 /// in an isolated directory, that a verified artifact can be brought back as a working database.

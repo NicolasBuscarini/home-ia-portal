@@ -86,7 +86,7 @@ public sealed class PortalBackupSchedulerTests
         var protector = new AesGcmBackupArtifactProtector(configuration,
             NullLogger<AesGcmBackupArtifactProtector>.Instance);
         return new PortalBackupService(configuration, TimeProvider.System, protector,
-            NullLogger<PortalBackupService>.Instance);
+            new PortalBackupMetrics(), NullLogger<PortalBackupService>.Instance);
     }
 
     private sealed class TempDirectory : IDisposable

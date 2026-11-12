@@ -261,7 +261,7 @@ public sealed class PortalBackupTests
             var protector = new AesGcmBackupArtifactProtector(configuration,
                 NullLogger<AesGcmBackupArtifactProtector>.Instance);
             var service = new PortalBackupService(configuration, TimeProvider.System, protector,
-                NullLogger<PortalBackupService>.Instance);
+                new PortalBackupMetrics(), NullLogger<PortalBackupService>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 service.CreateAsync(CancellationToken.None));
@@ -297,7 +297,7 @@ public sealed class PortalBackupTests
             var otherProtector = new AesGcmBackupArtifactProtector(other,
                 NullLogger<AesGcmBackupArtifactProtector>.Instance);
             var otherService = new PortalBackupService(other, TimeProvider.System, otherProtector,
-                NullLogger<PortalBackupService>.Instance);
+                new PortalBackupMetrics(), NullLogger<PortalBackupService>.Instance);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 otherService.RestoreAsync(artifact.FileName, Path.Combine(root, "restored"), CancellationToken.None));
@@ -308,13 +308,62 @@ public sealed class PortalBackupTests
         }
     }
 
+    [Fact]
+    public async Task Summary_endpoint_reports_last_backup_and_schedule()
+    {
+        await using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var login = await client.PostAsJsonAsync("/api/v1/auth/login",
+            new { username = "contract-user", password = "Contract-Password-123!" });
+        Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
+        client.DefaultRequestHeaders.Add("Cookie", Assert.Single(login.Headers.GetValues("Set-Cookie")).Split(';', 2)[0]);
+        client.DefaultRequestHeaders.Add("Origin", "http://localhost");
+
+        using var created = await client.PostAsync("/api/v1/admin/maintenance/backups", null);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var artifact = await created.Content.ReadFromJsonAsync<PortalBackupArtifact>();
+
+        using var summary = await client.GetAsync("/api/v1/admin/maintenance/backups/summary");
+        Assert.Equal(HttpStatusCode.OK, summary.StatusCode);
+        var payload = await summary.Content.ReadFromJsonAsync<PortalBackupSummary>();
+        Assert.NotNull(payload);
+        Assert.NotNull(payload!.LastSuccessAtUtc);
+        Assert.Equal(artifact!.FileName, payload.LastSuccessFileName);
+        Assert.Equal(artifact.SizeBytes, payload.LastSuccessSizeBytes);
+        Assert.Equal(artifact.Sha256, payload.LastSuccessSha256);
+        Assert.True(payload.ArtifactCount >= 1);
+        Assert.True(payload.TotalSizeBytes >= artifact.SizeBytes);
+        Assert.False(payload.ScheduleEnabled);
+        Assert.Null(payload.LastFailureAtUtc);
+    }
+
+    [Fact]
+    public void Metrics_render_backup_counters_after_create_and_failure()
+    {
+        var metrics = new PortalBackupMetrics();
+        var successAt = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000);
+        metrics.Created(4096, successAt);
+        metrics.ObservedDuration(TimeSpan.FromMilliseconds(120));
+        var failureAt = DateTimeOffset.FromUnixTimeSeconds(1_700_000_100);
+        metrics.Failed(failureAt);
+        metrics.Deleted();
+
+        var rendered = metrics.Render();
+        Assert.Contains("portal_backup_created_total", rendered);
+        Assert.Contains("portal_backup_failed_total", rendered);
+        Assert.Contains("portal_backup_deleted_total", rendered);
+        Assert.Contains("portal_backup_last_success_size_bytes 4096", rendered);
+        Assert.Contains("portal_backup_last_failure_timestamp_seconds", rendered);
+        Assert.Equal(failureAt, metrics.LastFailureAtUtc);
+    }
+
     private static PortalBackupService CreateService(string databasePath, string backupDirectory)
     {
         var configuration = BuildConfiguration(databasePath, backupDirectory);
         var protector = new AesGcmBackupArtifactProtector(configuration,
             NullLogger<AesGcmBackupArtifactProtector>.Instance);
         return new PortalBackupService(configuration, TimeProvider.System, protector,
-            NullLogger<PortalBackupService>.Instance);
+            new PortalBackupMetrics(), NullLogger<PortalBackupService>.Instance);
     }
 
     private static IConfiguration BuildConfiguration(string databasePath, string backupDirectory,

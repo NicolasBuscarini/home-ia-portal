@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using GarageWatch.Application.Maintenance;
@@ -38,13 +39,15 @@ public sealed class PortalBackupService : IPortalBackupService
     private readonly string backupDirectory;
     private readonly TimeProvider timeProvider;
     private readonly IBackupArtifactProtector protector;
+    private readonly PortalBackupMetrics metrics;
     private readonly ILogger<PortalBackupService> logger;
 
     public PortalBackupService(IConfiguration configuration, TimeProvider timeProvider,
-        IBackupArtifactProtector protector, ILogger<PortalBackupService> logger)
+        IBackupArtifactProtector protector, PortalBackupMetrics metrics, ILogger<PortalBackupService> logger)
     {
         this.timeProvider = timeProvider;
         this.protector = protector;
+        this.metrics = metrics;
         this.logger = logger;
         databasePath = configuration[IdentityBootstrapOptions.DatabasePathKey]
             ?? IdentityBootstrapOptions.DefaultDatabasePath;
@@ -61,12 +64,16 @@ public sealed class PortalBackupService : IPortalBackupService
     public async Task<PortalBackupArtifact> CreateAsync(CancellationToken cancellationToken)
     {
         if (!protector.IsConfigured)
+        {
+            metrics.Failed(timeProvider.GetUtcNow());
             throw new InvalidOperationException(
                 "Cifra de backup indisponível: configure PORTAL_BACKUP_ENCRYPTION_KEY e PORTAL_BACKUP_ENCRYPTION_KEY_VERSION.");
+        }
         Directory.CreateDirectory(backupDirectory);
         var createdAtUtc = timeProvider.GetUtcNow();
         var target = ResolveArtifactPath(createdAtUtc);
         var plaintextPath = target + ".plain";
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             await CopyAsync(plaintextPath, cancellationToken);
@@ -81,6 +88,8 @@ public sealed class PortalBackupService : IPortalBackupService
 
             var artifact = new PortalBackupArtifact(Path.GetFileName(target), createdAtUtc, size, sha256);
             await WriteManifestAsync(artifact, cipherSha256, cancellationToken);
+            metrics.Created(size, createdAtUtc);
+            metrics.ObservedDuration(stopwatch.Elapsed);
             logger.LogInformation(
                 "Backup do portal criado (cifrado, chave {KeyVersion}): {FileName} ({SizeBytes} bytes, sha256 {Sha256}).",
                 protector.ActiveKeyVersion, artifact.FileName, artifact.SizeBytes, artifact.Sha256);
@@ -88,6 +97,7 @@ public sealed class PortalBackupService : IPortalBackupService
         }
         catch
         {
+            metrics.Failed(timeProvider.GetUtcNow());
             TryDelete(target);
             throw;
         }
@@ -187,8 +197,10 @@ public sealed class PortalBackupService : IPortalBackupService
             throw new InvalidOperationException("O nome do artefato de backup deve ser um nome de arquivo, sem diretórios.");
         var artifactPath = Path.Combine(backupDirectory, backupFileName);
         var manifestPath = artifactPath + ".json";
+        var existed = File.Exists(artifactPath);
         TryDelete(artifactPath);
         TryDelete(manifestPath);
+        if (existed) metrics.Deleted();
         return Task.CompletedTask;
     }
 

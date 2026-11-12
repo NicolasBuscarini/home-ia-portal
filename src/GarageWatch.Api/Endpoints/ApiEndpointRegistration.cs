@@ -31,6 +31,7 @@ public static class ApiEndpointRegistration
             new Admin.GetMonitoringCaptureEndpoint(), new Admin.UpdateMonitoringCaptureEndpoint(),
             new Admin.GetPlatformSettingsEndpoint(), new Admin.UpdatePlatformSettingsEndpoint(),
             new Admin.CreatePortalBackupEndpoint(), new Admin.ListPortalBackupsEndpoint(),
+            new Admin.GetPortalBackupSummaryEndpoint(),
             new Biometrics.GetIdentityObservationFramesEndpoint(),
             new Biometrics.GetIdentityObservationFrameEndpoint(),
             new Admin.ListUsersEndpoint(), new Admin.GetUserEndpoint(), new Admin.DeactivateUserEndpoint(),

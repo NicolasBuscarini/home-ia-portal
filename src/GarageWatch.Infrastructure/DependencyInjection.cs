@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddSingleton<IIntegrationCredentialProtector, Integrations.AesGcmIntegrationCredentialProtector>();
         services.AddScoped<IIntegrationCredentialStore, Integrations.IntegrationCredentialStore>();
         services.AddSingleton<IBackupArtifactProtector, Maintenance.AesGcmBackupArtifactProtector>();
+        services.AddSingleton<PortalBackupMetrics>();
         services.AddSingleton<IPortalBackupService, Maintenance.PortalBackupService>();
         services.AddDbContext<IamDbContext>((provider, options) =>
         {
