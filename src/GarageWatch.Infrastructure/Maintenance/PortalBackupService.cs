@@ -9,12 +9,14 @@ using Microsoft.Extensions.Logging;
 namespace GarageWatch.Infrastructure.Maintenance;
 
 /// <summary>
-/// Creates consistent copies of the portal SQLite database with <c>VACUUM INTO</c>, so a running
-/// service is not copied page by page while WAL pages are pending. Each artifact is verified with
-/// <c>PRAGMA integrity_check</c> and described by a JSON manifest carrying size and SHA-256; an
-/// operator copies the directory to independent storage (NAS/host) and restores with services stopped.
-/// <see cref="RestoreAsync"/> re-verifies the manifest hash and integrity and restores the artifact
-/// into an isolated directory only, proving it opens as a working database without touching the live path.
+/// Creates consistent, encrypted copies of the portal SQLite database with <c>VACUUM INTO</c>, so a
+/// running service is not copied page by page while WAL pages are pending. Each artifact is verified
+/// with <c>PRAGMA integrity_check</c>, described by a JSON manifest carrying the plaintext size/SHA-256
+/// and the ciphertext SHA-256 plus key version, and sealed with AES-256-GCM so the backup directory
+/// never holds the database in clear. An operator copies the directory to independent storage
+/// (NAS/host) and restores with services stopped. <see cref="RestoreAsync"/> re-verifies the manifest
+/// hash and integrity and restores the artifact into an isolated directory only, proving it opens as a
+/// working database without touching the live path.
 /// </summary>
 public sealed class PortalBackupService : IPortalBackupService
 {
@@ -22,8 +24,10 @@ public sealed class PortalBackupService : IPortalBackupService
 
     private const string ArtifactPrefix = "portal-";
     private const string ManifestSuffix = ".db.json";
-    private const int ManifestSchemaVersion = 1;
+    private const int ManifestSchemaVersion = 2;
     private const int MaximumListedArtifacts = 50;
+    private const int NonceBytes = 12;
+    private const int TagBytes = 16;
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -33,12 +37,14 @@ public sealed class PortalBackupService : IPortalBackupService
     private readonly string databasePath;
     private readonly string backupDirectory;
     private readonly TimeProvider timeProvider;
+    private readonly IBackupArtifactProtector protector;
     private readonly ILogger<PortalBackupService> logger;
 
     public PortalBackupService(IConfiguration configuration, TimeProvider timeProvider,
-        ILogger<PortalBackupService> logger)
+        IBackupArtifactProtector protector, ILogger<PortalBackupService> logger)
     {
         this.timeProvider = timeProvider;
+        this.protector = protector;
         this.logger = logger;
         databasePath = configuration[IdentityBootstrapOptions.DatabasePathKey]
             ?? IdentityBootstrapOptions.DefaultDatabasePath;
@@ -54,25 +60,41 @@ public sealed class PortalBackupService : IPortalBackupService
 
     public async Task<PortalBackupArtifact> CreateAsync(CancellationToken cancellationToken)
     {
+        if (!protector.IsConfigured)
+            throw new InvalidOperationException(
+                "Cifra de backup indisponível: configure PORTAL_BACKUP_ENCRYPTION_KEY e PORTAL_BACKUP_ENCRYPTION_KEY_VERSION.");
         Directory.CreateDirectory(backupDirectory);
         var createdAtUtc = timeProvider.GetUtcNow();
         var target = ResolveArtifactPath(createdAtUtc);
+        var plaintextPath = target + ".plain";
         try
         {
-            await CopyAsync(target, cancellationToken);
-            await VerifyAsync(target, cancellationToken);
-            var size = new FileInfo(target).Length;
-            var sha256 = await HashAsync(target, cancellationToken);
+            await CopyAsync(plaintextPath, cancellationToken);
+            await VerifyAsync(plaintextPath, cancellationToken);
+            var size = new FileInfo(plaintextPath).Length;
+            var sha256 = await HashFileAsync(plaintextPath, cancellationToken);
+
+            var plaintext = await File.ReadAllBytesAsync(plaintextPath, cancellationToken);
+            var envelope = protector.Seal(plaintext);
+            await WriteEnvelopeAsync(target, envelope, cancellationToken);
+            var cipherSha256 = await HashFileAsync(target, cancellationToken);
+
             var artifact = new PortalBackupArtifact(Path.GetFileName(target), createdAtUtc, size, sha256);
-            await WriteManifestAsync(artifact, cancellationToken);
-            logger.LogInformation("Backup do portal criado: {FileName} ({SizeBytes} bytes, sha256 {Sha256}).",
-                artifact.FileName, artifact.SizeBytes, artifact.Sha256);
+            await WriteManifestAsync(artifact, cipherSha256, cancellationToken);
+            logger.LogInformation(
+                "Backup do portal criado (cifrado, chave {KeyVersion}): {FileName} ({SizeBytes} bytes, sha256 {Sha256}).",
+                protector.ActiveKeyVersion, artifact.FileName, artifact.SizeBytes, artifact.Sha256);
             return artifact;
         }
         catch
         {
             TryDelete(target);
             throw;
+        }
+        finally
+        {
+            // The plaintext working copy must never survive, on success or failure.
+            TryDelete(plaintextPath);
         }
     }
 
@@ -129,24 +151,26 @@ public sealed class PortalBackupService : IPortalBackupService
         if (!File.Exists(artifactPath))
             throw new InvalidOperationException($"Artefato de backup ausente: {manifest.Artifact.FileName}.");
 
-        var sourceHash = await HashAsync(artifactPath, cancellationToken);
-        if (!string.Equals(sourceHash, manifest.Artifact.Sha256, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("O artefato de backup não confere com o SHA-256 registrado no manifesto.");
+        var artifactBytes = await File.ReadAllBytesAsync(artifactPath, cancellationToken);
+        var plaintext = manifest.Encryption is null
+            ? artifactBytes
+            : DecryptArtifact(artifactBytes, manifest.Encryption);
 
-        // Re-verify integrity at restore time, on the artifact that will actually be restored.
-        await VerifyAsync(artifactPath, cancellationToken);
+        var plaintextSha256 = Convert.ToHexString(SHA256.HashData(plaintext)).ToLowerInvariant();
+        if (!string.Equals(plaintextSha256, manifest.Artifact.Sha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("O conteúdo do artefato não confere com o SHA-256 registrado no manifesto.");
 
         Directory.CreateDirectory(targetDirectory);
         var restoredPath = Path.Combine(targetDirectory, manifest.Artifact.FileName);
         if (File.Exists(restoredPath))
             throw new InvalidOperationException($"O destino do restore já existe: {restoredPath}.");
 
-        File.Copy(artifactPath, restoredPath, overwrite: false);
+        await File.WriteAllBytesAsync(restoredPath, plaintext, cancellationToken);
         await VerifyAsync(restoredPath, cancellationToken);
 
         var tableCount = await CountUserTablesAsync(restoredPath, cancellationToken);
         var size = new FileInfo(restoredPath).Length;
-        var restoredHash = await HashAsync(restoredPath, cancellationToken);
+        var restoredHash = await HashFileAsync(restoredPath, cancellationToken);
 
         logger.LogInformation(
             "Restore de ensaio concluído: {FileName} -> {RestoredPath} ({SizeBytes} bytes, {TableCount} tabelas, sha256 {Sha256}).",
@@ -166,6 +190,19 @@ public sealed class PortalBackupService : IPortalBackupService
         TryDelete(artifactPath);
         TryDelete(manifestPath);
         return Task.CompletedTask;
+    }
+
+    private byte[] DecryptArtifact(byte[] artifactBytes, BackupEncryption encryption)
+    {
+        if (artifactBytes.Length < NonceBytes + TagBytes)
+            throw new InvalidOperationException("Artefato de backup cifrado inválido.");
+        var cipherSha256 = Convert.ToHexString(SHA256.HashData(artifactBytes)).ToLowerInvariant();
+        if (!string.Equals(cipherSha256, encryption.CipherSha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("O artefato cifrado não confere com o SHA-256 registrado no manifesto.");
+        var nonce = artifactBytes.AsSpan(0, NonceBytes).ToArray();
+        var tag = artifactBytes.AsSpan(artifactBytes.Length - TagBytes).ToArray();
+        var ciphertext = artifactBytes.AsSpan(NonceBytes, artifactBytes.Length - NonceBytes - TagBytes).ToArray();
+        return protector.Open(new EncryptedBackupEnvelope(nonce, ciphertext, tag), encryption.KeyVersion);
     }
 
     private async Task<Manifest?> ReadManifestAsync(string backupFileName, CancellationToken cancellationToken)
@@ -246,18 +283,30 @@ public sealed class PortalBackupService : IPortalBackupService
             throw new InvalidOperationException("O backup do portal não passou na verificação de integridade.");
     }
 
-    private static async Task<string> HashAsync(string artifactPath, CancellationToken cancellationToken)
+    private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
-        await using var stream = File.OpenRead(artifactPath);
+        await using var stream = File.OpenRead(path);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken);
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
-    private async Task WriteManifestAsync(PortalBackupArtifact artifact, CancellationToken cancellationToken)
+    private static async Task WriteEnvelopeAsync(string target, EncryptedBackupEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(target, FileMode.CreateNew, FileAccess.Write,
+            FileShare.None, 81920, true);
+        await stream.WriteAsync(envelope.Nonce, cancellationToken);
+        await stream.WriteAsync(envelope.Ciphertext, cancellationToken);
+        await stream.WriteAsync(envelope.Tag, cancellationToken);
+    }
+
+    private async Task WriteManifestAsync(PortalBackupArtifact artifact, string cipherSha256,
+        CancellationToken cancellationToken)
     {
         var manifestPath = Path.Combine(backupDirectory, artifact.FileName + ".json");
         var temporaryPath = manifestPath + ".tmp";
-        var manifest = new Manifest(ManifestSchemaVersion, artifact, Path.GetFileName(databasePath));
+        var encryption = new BackupEncryption("aes-256-gcm", protector.ActiveKeyVersion!, cipherSha256);
+        var manifest = new Manifest(ManifestSchemaVersion, artifact, Path.GetFileName(databasePath), encryption);
         await using (var stream = File.Create(temporaryPath))
             await JsonSerializer.SerializeAsync(stream, manifest, SerializerOptions, cancellationToken);
         File.Move(temporaryPath, manifestPath, true);
@@ -276,5 +325,8 @@ public sealed class PortalBackupService : IPortalBackupService
         }
     }
 
-    private sealed record Manifest(int Schema, PortalBackupArtifact Artifact, string SourceDatabase);
+    private sealed record Manifest(int Schema, PortalBackupArtifact Artifact, string SourceDatabase,
+        BackupEncryption? Encryption = null);
+
+    private sealed record BackupEncryption(string Algorithm, string KeyVersion, string CipherSha256);
 }

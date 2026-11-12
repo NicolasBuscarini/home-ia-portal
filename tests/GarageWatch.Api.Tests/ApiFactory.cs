@@ -143,7 +143,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["ACTIVITYWATCH_BASE_URL"] = _activityWatchBaseUrl,
             ["EVENT_INGEST_RATE_LIMIT_PER_MINUTE"] = _eventIngestRateLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["CREDENTIAL_ENCRYPTION_KEY"] = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
-            ["CREDENTIAL_ENCRYPTION_KEY_VERSION"] = "v1"
+            ["CREDENTIAL_ENCRYPTION_KEY_VERSION"] = "v1",
+            ["PORTAL_BACKUP_ENCRYPTION_KEY"] = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
+            ["PORTAL_BACKUP_ENCRYPTION_KEY_VERSION"] = "test-1"
         }));
         if (_loggerProvider is not null)
         {

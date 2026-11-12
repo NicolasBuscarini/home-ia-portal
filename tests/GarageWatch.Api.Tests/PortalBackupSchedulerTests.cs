@@ -78,10 +78,14 @@ public sealed class PortalBackupSchedulerTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 [IdentityBootstrapOptions.DatabasePathKey] = databasePath,
-                [PortalBackupService.BackupDirectoryKey] = backupDirectory
+                [PortalBackupService.BackupDirectoryKey] = backupDirectory,
+                [AesGcmBackupArtifactProtector.KeySetting] = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
+                [AesGcmBackupArtifactProtector.KeyVersionSetting] = "test-1"
             })
             .Build();
-        return new PortalBackupService(configuration, TimeProvider.System,
+        var protector = new AesGcmBackupArtifactProtector(configuration,
+            NullLogger<AesGcmBackupArtifactProtector>.Instance);
+        return new PortalBackupService(configuration, TimeProvider.System, protector,
             NullLogger<PortalBackupService>.Instance);
     }
 

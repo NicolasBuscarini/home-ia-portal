@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddSingleton<IBiometricDataProtector, Biometrics.AesGcmBiometricDataProtector>();
         services.AddSingleton<IIntegrationCredentialProtector, Integrations.AesGcmIntegrationCredentialProtector>();
         services.AddScoped<IIntegrationCredentialStore, Integrations.IntegrationCredentialStore>();
+        services.AddSingleton<IBackupArtifactProtector, Maintenance.AesGcmBackupArtifactProtector>();
         services.AddSingleton<IPortalBackupService, Maintenance.PortalBackupService>();
         services.AddDbContext<IamDbContext>((provider, options) =>
         {
