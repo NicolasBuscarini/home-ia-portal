@@ -49,3 +49,5 @@ T17-C adiciona a ingestão `POST /api/v1/events`: `EVENT_INGEST_RATE_LIMIT_PER_M
 ## Backup do banco do portal
 
 `PORTAL_BACKUP_DIRECTORY` define o diretório absoluto dos backups do SQLite do portal; quando ausente, o padrão é `backups/` ao lado de `IDENTITY_DB_PATH`. Para cumprir a política de cópia independente, aponte a variável para um volume montado fora do volume de dados do portal (host/NAS) e mantenha a chave de cifragem de backups separada. O diretório precisa ser gravável pelo usuário do processo (`HOST_UID`/`HOST_GID` no Compose).
+
+`PORTAL_BACKUP_SCHEDULE_ENABLED` (default `false`), `PORTAL_BACKUP_SCHEDULE_INTERVAL_HOURS` (default `24`, faixa 1–168) e `PORTAL_BACKUP_SCHEDULE_RETENTION_COUNT` (default `14`, faixa 1–100) ativam o backup diário automático: a cada intervalo, o worker cria um artefato verificado e remove os mais antigos além da retenção. Desativado por padrão; a primeira execução ocorre no startup e depois a cada intervalo.

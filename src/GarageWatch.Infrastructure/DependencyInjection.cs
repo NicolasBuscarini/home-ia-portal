@@ -155,6 +155,7 @@ public static class DependencyInjection
         var platformEventRetentionOptions = PlatformEventRetentionOptions.FromConfiguration(configuration);
         var identityObservationRetentionOptions =
             IdentityObservationRetentionOptions.FromConfiguration(configuration);
+        var portalBackupScheduleOptions = PortalBackupScheduleOptions.FromConfiguration(configuration);
         services.AddSingleton(provider =>
         {
             var token = MonitoringServiceTokenOptions.FromConfiguration(
@@ -205,6 +206,7 @@ public static class DependencyInjection
         services.AddSingleton(portalOptions);
         services.AddSingleton(platformEventRetentionOptions);
         services.AddSingleton(identityObservationRetentionOptions);
+        services.AddSingleton(portalBackupScheduleOptions);
         services.AddSingleton(triggerOptions);
         services.AddSingleton(clipAnalysisOptions);
         services.AddSingleton(detectorOptions);
@@ -230,6 +232,8 @@ public static class DependencyInjection
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<SpoolWatcherWorker>());
         services.AddSingleton<IHostedService, PlatformEventRetentionWorker>();
         services.AddSingleton<IHostedService, IdentityObservationRetentionWorker>();
+        services.AddSingleton<PortalBackupSchedulerService>();
+        services.AddSingleton<IHostedService, PortalBackupSchedulerWorker>();
         return services;
     }
 }

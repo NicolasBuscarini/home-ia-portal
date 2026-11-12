@@ -133,6 +133,110 @@ public sealed class PortalBackupTests
         Assert.Equal(artifact.FileName, recorded.ResourceId);
     }
 
+    [Fact]
+    public async Task Restore_drill_recreates_a_working_database_in_an_isolated_directory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"portal-restore-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var databasePath = Path.Combine(root, "portal.db");
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                await using var seed = connection.CreateCommand();
+                seed.CommandText =
+                    "CREATE TABLE Sample (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL);" +
+                    "INSERT INTO Sample (Name) VALUES ('alice');";
+                await seed.ExecuteNonQueryAsync();
+            }
+
+            var backupDirectory = Path.Combine(root, "backups");
+            var service = CreateService(databasePath, backupDirectory);
+            var artifact = await service.CreateAsync(CancellationToken.None);
+
+            var targetDirectory = Path.Combine(root, "restored");
+            var result = await service.RestoreAsync(artifact.FileName, targetDirectory, CancellationToken.None);
+
+            Assert.Equal(Path.Combine(targetDirectory, artifact.FileName), result.RestoredDatabasePath);
+            Assert.Equal(artifact.FileName, result.SourceFileName);
+            Assert.Equal(artifact.Sha256, result.Sha256);
+            Assert.Equal(artifact.SizeBytes, result.SizeBytes);
+            Assert.Equal(1, result.TableCount);
+
+            await using var restored = new SqliteConnection($"Data Source={result.RestoredDatabasePath};Mode=ReadOnly");
+            await restored.OpenAsync();
+            await using var read = restored.CreateCommand();
+            read.CommandText = "SELECT Name FROM Sample";
+            Assert.Equal("alice", await read.ExecuteScalarAsync());
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task Restore_refuses_when_the_artifact_does_not_match_the_manifest_hash()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"portal-restore-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var databasePath = Path.Combine(root, "portal.db");
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                await using var seed = connection.CreateCommand();
+                seed.CommandText = "CREATE TABLE Sample (Id INTEGER PRIMARY KEY);";
+                await seed.ExecuteNonQueryAsync();
+            }
+
+            var backupDirectory = Path.Combine(root, "backups");
+            var service = CreateService(databasePath, backupDirectory);
+            var artifact = await service.CreateAsync(CancellationToken.None);
+            var artifactPath = Path.Combine(backupDirectory, artifact.FileName);
+            await File.AppendAllTextAsync(artifactPath, "tampered");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.RestoreAsync(artifact.FileName, Path.Combine(root, "restored"), CancellationToken.None));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task Restore_refuses_when_the_manifest_is_missing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"portal-restore-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var databasePath = Path.Combine(root, "portal.db");
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                await using var seed = connection.CreateCommand();
+                seed.CommandText = "CREATE TABLE Sample (Id INTEGER PRIMARY KEY);";
+                await seed.ExecuteNonQueryAsync();
+            }
+
+            var backupDirectory = Path.Combine(root, "backups");
+            var service = CreateService(databasePath, backupDirectory);
+            var artifact = await service.CreateAsync(CancellationToken.None);
+            File.Delete(Path.Combine(backupDirectory, artifact.FileName + ".json"));
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.RestoreAsync(artifact.FileName, Path.Combine(root, "restored"), CancellationToken.None));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     private static PortalBackupService CreateService(string databasePath, string backupDirectory)
     {
         var configuration = new ConfigurationBuilder()

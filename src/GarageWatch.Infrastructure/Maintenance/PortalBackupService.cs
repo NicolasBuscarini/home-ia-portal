@@ -13,6 +13,8 @@ namespace GarageWatch.Infrastructure.Maintenance;
 /// service is not copied page by page while WAL pages are pending. Each artifact is verified with
 /// <c>PRAGMA integrity_check</c> and described by a JSON manifest carrying size and SHA-256; an
 /// operator copies the directory to independent storage (NAS/host) and restores with services stopped.
+/// <see cref="RestoreAsync"/> re-verifies the manifest hash and integrity and restores the artifact
+/// into an isolated directory only, proving it opens as a working database without touching the live path.
 /// </summary>
 public sealed class PortalBackupService : IPortalBackupService
 {
@@ -109,6 +111,92 @@ public sealed class PortalBackupService : IPortalBackupService
             .ThenByDescending(item => item.FileName, StringComparer.Ordinal)
             .Take(MaximumListedArtifacts)
             .ToArray();
+    }
+
+    public async Task<PortalRestoreResult> RestoreAsync(string backupFileName, string targetDirectory,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(backupFileName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetDirectory);
+        if (Path.GetFileName(backupFileName) != backupFileName)
+            throw new InvalidOperationException("O nome do artefato de backup deve ser um nome de arquivo, sem diretórios.");
+        if (!Path.IsPathFullyQualified(targetDirectory))
+            throw new InvalidOperationException("O diretório de destino do restore deve ser um caminho absoluto.");
+
+        var manifest = await ReadManifestAsync(backupFileName, cancellationToken)
+            ?? throw new InvalidOperationException($"Manifesto de backup ausente ou ilegível: {backupFileName}.");
+        var artifactPath = Path.Combine(backupDirectory, manifest.Artifact.FileName);
+        if (!File.Exists(artifactPath))
+            throw new InvalidOperationException($"Artefato de backup ausente: {manifest.Artifact.FileName}.");
+
+        var sourceHash = await HashAsync(artifactPath, cancellationToken);
+        if (!string.Equals(sourceHash, manifest.Artifact.Sha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("O artefato de backup não confere com o SHA-256 registrado no manifesto.");
+
+        // Re-verify integrity at restore time, on the artifact that will actually be restored.
+        await VerifyAsync(artifactPath, cancellationToken);
+
+        Directory.CreateDirectory(targetDirectory);
+        var restoredPath = Path.Combine(targetDirectory, manifest.Artifact.FileName);
+        if (File.Exists(restoredPath))
+            throw new InvalidOperationException($"O destino do restore já existe: {restoredPath}.");
+
+        File.Copy(artifactPath, restoredPath, overwrite: false);
+        await VerifyAsync(restoredPath, cancellationToken);
+
+        var tableCount = await CountUserTablesAsync(restoredPath, cancellationToken);
+        var size = new FileInfo(restoredPath).Length;
+        var restoredHash = await HashAsync(restoredPath, cancellationToken);
+
+        logger.LogInformation(
+            "Restore de ensaio concluído: {FileName} -> {RestoredPath} ({SizeBytes} bytes, {TableCount} tabelas, sha256 {Sha256}).",
+            manifest.Artifact.FileName, restoredPath, size, tableCount, restoredHash);
+
+        return new PortalRestoreResult(restoredPath, manifest.Artifact.FileName, size, restoredHash, tableCount);
+    }
+
+    public Task DeleteAsync(string backupFileName, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(backupFileName);
+        if (Path.GetFileName(backupFileName) != backupFileName)
+            throw new InvalidOperationException("O nome do artefato de backup deve ser um nome de arquivo, sem diretórios.");
+        var artifactPath = Path.Combine(backupDirectory, backupFileName);
+        var manifestPath = artifactPath + ".json";
+        TryDelete(artifactPath);
+        TryDelete(manifestPath);
+        return Task.CompletedTask;
+    }
+
+    private async Task<Manifest?> ReadManifestAsync(string backupFileName, CancellationToken cancellationToken)
+    {
+        var manifestPath = Path.Combine(backupDirectory, backupFileName + ".json");
+        if (!File.Exists(manifestPath)) return null;
+        try
+        {
+            await using var stream = File.OpenRead(manifestPath);
+            return await JsonSerializer.DeserializeAsync<Manifest>(stream, SerializerOptions, cancellationToken);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<int> CountUserTablesAsync(string databasePath, CancellationToken cancellationToken)
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
+        }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private string ResolveArtifactPath(DateTimeOffset createdAtUtc)

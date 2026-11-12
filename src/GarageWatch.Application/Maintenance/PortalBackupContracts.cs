@@ -11,12 +11,29 @@ public sealed record PortalBackupArtifact(
     string Sha256);
 
 /// <summary>
-/// Consistent backup of the portal SQLite database. Restore stays an operator procedure with the
-/// services stopped; this boundary only creates and lists verified artifacts on an independent path.
+/// Result of a restore drill performed on an isolated directory. It never touches the live
+/// database; it proves that a verified artifact opens as a valid, non-empty SQLite database.
+/// </summary>
+public sealed record PortalRestoreResult(
+    string RestoredDatabasePath,
+    string SourceFileName,
+    long SizeBytes,
+    string Sha256,
+    int TableCount);
+
+/// <summary>
+/// Consistent backup and isolated restore of the portal SQLite database. Restore to the live path
+/// stays an operator procedure with the services stopped; <see cref="RestoreAsync"/> only proves,
+/// in an isolated directory, that a verified artifact can be brought back as a working database.
 /// </summary>
 public interface IPortalBackupService
 {
     Task<PortalBackupArtifact> CreateAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<PortalBackupArtifact>> ListAsync(CancellationToken cancellationToken);
+
+    Task<PortalRestoreResult> RestoreAsync(string backupFileName, string targetDirectory,
+        CancellationToken cancellationToken);
+
+    Task DeleteAsync(string backupFileName, CancellationToken cancellationToken);
 }

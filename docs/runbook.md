@@ -69,6 +69,8 @@ Política (docs/operacao/07 do contexto): backup diário e consistente de metada
 
 **Backup sob demanda:** autenticar como Administrador, enviar `POST /api/v1/admin/maintenance/backups` com Origin same-origin e conferir `fileName`, `sizeBytes` e `sha256`; `GET /api/v1/admin/maintenance/backups` lista os artefatos. O arquivo aparece em `PORTAL_BACKUP_DIRECTORY` (padrão `backups/` ao lado de `IDENTITY_DB_PATH`) com um manifesto `.db.json`. Copie o par (`.db` + manifesto) para o destino independente e registre o `sha256`; o Compose mantém o diretório no volume do portal por padrão, então aponte a variável para um bind mount externo quando for usar esse caminho como cópia real.
 
+**Backup agendado:** com `PORTAL_BACKUP_SCHEDULE_ENABLED=true`, um worker cria um backup verificado no startup e depois a cada `PORTAL_BACKUP_SCHEDULE_INTERVAL_HOURS` (default 24), removendo os artefatos mais antigos além de `PORTAL_BACKUP_SCHEDULE_RETENTION_COUNT` (default 14). A falha de um ciclo é registrada e não interrompe o serviço.
+
 **Restore (procedimento do operador, serviço parado):**
 
 1. Registrar o estado atual (`./home-ia status`, health e contagens) e confirmar que nenhuma captura real está em andamento.
@@ -78,5 +80,7 @@ Política (docs/operacao/07 do contexto): backup diário e consistente de metada
 5. Verificar `/health/ready`, login do administrador, `GET /api/v1/admin/events` (integridade dos eventos) e a projeção de navegação antes de reabrir o uso.
 6. Reconciliar o spool do Monitoramento (clipes/manifestos/análise/biometria) com o banco restaurado: eventos e referências públicas dos dois lados precisam apontar para os mesmos recursos; registrar órfãos e mídia ausente em vez de apagar.
 7. Se o restore for de um banco anterior a uma revogação/expiração biométrica, a biometria **não** volta: a inscrição precisa ser refeita pelo titular.
+
+**Ensaio em ambiente isolado (automatizado, `T11`):** `IPortalBackupService.RestoreAsync(backupFileName, targetDirectory, …)` re-verifica o `sha256` do artefato contra o manifesto e o `PRAGMA integrity_check`, copia para um diretório isolado (nunca o `IDENTITY_DB_PATH`), re-verifica a cópia e confirma que ela abre como SQLite com tabelas de usuário. Os testes de integração cobrem o round-trip (backup → restore → dados presentes), a rejeição por hash divergente e por manifesto ausente. O restore real sobre o banco ativo continua procedimento do operador com serviço parado, descrito acima.
 
 **Ensaio periódico:** trimestralmente, restaurar um artefato em ambiente isolado e cronometrar o passo a passo; guardar data, artefato (`sha256`) e resultado. Sem esse ensaio, o backup não conta como recuperação comprovada.
