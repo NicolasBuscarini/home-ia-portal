@@ -233,6 +233,34 @@ public sealed class AccessProfileService(
         return false;
     }
 
+    /// <summary>
+    /// True when the account holds <paramref name="permissionKey"/> at any applicable scope: global, the
+    /// permission's own module, or any enabled camera (for camera-grantable permissions). This is the
+    /// module/feature visibility check; endpoint authorization stays module-scoped.
+    /// </summary>
+    public async Task<bool> IsAllowedAnyScopeAsync(Guid userId, string permissionKey,
+        CancellationToken cancellationToken)
+    {
+        if (!PermissionCatalog.TryGet(permissionKey, out var definition))
+            return false;
+        var subject = await GetSubjectAsync(userId, cancellationToken);
+        if (!subject.IsActive) return false;
+        if (subject.IsOwner) return true;
+        if (!definition.IsAvailable || !definition.IsDelegable) return false;
+        if (evaluator.IsAllowed(subject, new PermissionRequest(permissionKey))) return true;
+        if (evaluator.IsAllowed(subject, new PermissionRequest(permissionKey, ModuleId: definition.Module)))
+            return true;
+        if (!definition.AllowedScopeKinds.Contains(PermissionScopeKind.Camera)) return false;
+        var cameras = await database.CameraCatalog.AsNoTracking()
+            .Where(camera => camera.IsEnabled && camera.Context.IsEnabled)
+            .Select(camera => new { camera.ContextId, camera.CameraId })
+            .ToArrayAsync(cancellationToken);
+        foreach (var camera in cameras)
+            if (evaluator.IsAllowed(subject, new PermissionRequest(permissionKey, camera.ContextId, camera.CameraId)))
+                return true;
+        return false;
+    }
+
     private async Task<AuthorizationSubject> EnsureAssignmentManager(Guid actorId)
     {
         var subject = await GetSubjectAsync(actorId, cancellationToken: CancellationToken.None);

@@ -234,7 +234,7 @@ public sealed class BiometricEnrollmentService(IamDbContext database, IIamUnitOf
     }
 
     private Task<bool> CanManageAsync(Guid actorId, CancellationToken cancellationToken) =>
-        profiles.IsAllowedAnyCameraAsync(actorId, ManagePermission, cancellationToken);
+        profiles.IsAllowedAnyScopeAsync(actorId, ManagePermission, cancellationToken);
 
     private static byte[] Serialize(IReadOnlyList<float> values)
     {

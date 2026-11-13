@@ -107,13 +107,13 @@ public sealed class PortalService(
         foreach (var module in modules)
         {
             if (!administrator && module.RequiredPermission is not null &&
-                !await profiles.IsAllowedAnyCameraAsync(userId, module.RequiredPermission, cancellationToken))
+                !await profiles.IsAllowedAnyScopeAsync(userId, module.RequiredPermission, cancellationToken))
                 continue;
             var items = new List<PortalNavigationItem>();
             foreach (var item in module.Items.OrderBy(item => item.SortOrder).ThenBy(item => item.ItemId))
             {
                 if (!administrator && item.RequiredPermission is not null &&
-                    !await profiles.IsAllowedAnyCameraAsync(userId, item.RequiredPermission, cancellationToken))
+                    !await profiles.IsAllowedAnyScopeAsync(userId, item.RequiredPermission, cancellationToken))
                     continue;
                 items.Add(new PortalNavigationItem(item.ItemId, item.LabelKey, item.SortOrder));
             }
