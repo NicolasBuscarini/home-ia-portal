@@ -13,6 +13,9 @@ public sealed class MonitoringClipFramesClient(IHttpClientFactory httpClientFact
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
+            // The frames manifest runs inline face detection (up to MONITORING_FACE_TIMEOUT_SECONDS) before
+            // responding, so the default 3s "monitoring-module" timeout is too short and yields false 503s.
+            client.Timeout = TimeSpan.FromSeconds(120);
             using var response = await client.GetAsync(
                 $"api/v1/monitoring/clips/{Uri.EscapeDataString(clipPublicId)}/frames", cancellationToken);
             return response.IsSuccessStatusCode
@@ -32,6 +35,7 @@ public sealed class MonitoringClipFramesClient(IHttpClientFactory httpClientFact
         try
         {
             using var client = httpClientFactory.CreateClient("monitoring-module");
+            client.Timeout = TimeSpan.FromSeconds(120);
             using var response = await client.GetAsync(
                 $"api/v1/monitoring/clips/{Uri.EscapeDataString(clipPublicId)}/frames/{index}", cancellationToken);
             if (!response.IsSuccessStatusCode) return null;
